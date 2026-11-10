@@ -1,0 +1,28 @@
+{
+  "_source": "Adapted from 'Reference: Announcement Categories & Financial Glossary' (ENAM build challenge companion).",
+  "categories": [
+    {"id": "results",            "label": "Results",            "care": true,  "desc": "Quarterly/annual results, the board meeting approving them, results decks, ads confirming publication."},
+    {"id": "M&A",                "label": "M&A",                "care": true,  "desc": "Acquisition, merger, demerger, JV, investing in or selling a stake in a subsidiary."},
+    {"id": "fund_raise",         "label": "Fund raise",         "care": true,  "desc": "Rights issue, QIP, preferential allotment, buyback, commercial paper or other debt."},
+    {"id": "management_change",  "label": "Management change",  "care": true,  "desc": "CEO, CFO, MD or director joining, resigning or retiring."},
+    {"id": "litigation",         "label": "Litigation",         "care": true,  "desc": "Lawsuits, regulatory orders, fines, warnings, insolvency proceedings."},
+    {"id": "insider_trading",    "label": "Insider trade",      "care": true,  "desc": "A promoter or insider buying or selling their own shares."},
+    {"id": "earnings_call",      "label": "Earnings call",      "care": false, "desc": "Call notice, transcript or recording link."},
+    {"id": "investor_meetings",  "label": "Investor meeting",   "care": false, "desc": "Meetings with specific investors or funds, conference attendance."},
+    {"id": "credit_rating",      "label": "Credit rating",      "care": true,  "desc": "A rating agency assigning, upgrading, downgrading or reaffirming a rating."},
+    {"id": "dividend",           "label": "Dividend",           "care": false, "desc": "A cash dividend with its record date."},
+    {"id": "bonus_split",        "label": "Bonus / split",      "care": true,  "desc": "Bonus issue or stock split."},
+    {"id": "capex",              "label": "Capex",              "care": true,  "desc": "Approving spend on a new plant, facility or capacity."},
+    {"id": "press_release",      "label": "Press release",      "care": true,  "desc": "Order wins, new products, partnerships, rumour clarifications."},
+    {"id": "postal_ballot",      "label": "Postal ballot",      "care": false, "desc": "Shareholder voting by postal ballot."},
+    {"id": "agm_egm",            "label": "AGM / EGM",          "care": false, "desc": "General meeting notice and result."},
+    {"id": "pledging",           "label": "Pledging",           "care": true,  "desc": "A promoter pledging or releasing shares."},
+    {"id": "unclassified",       "label": "Routine paperwork",  "care": false, "desc": "ESOP allotments, compliance certificates, ESG reports, auditor appointments."}
+  ],
+  "routine_subtypes": {
+    "results": ["intimation", "ad", "trading_window", "deck", "companion"],
+    "management_change": ["board", "other"],
+    "credit_rating": ["reaffirmed"],
+    "press_release": ["clarification_routine"]
+  }
+}

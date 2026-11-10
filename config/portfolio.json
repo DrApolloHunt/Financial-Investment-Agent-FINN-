@@ -1,0 +1,31 @@
+{
+  "_note": "Mock portfolio for the demo. Edit freely: symbols are NSE symbols. The research engine is not tied to this list.",
+  "portfolio": [
+    {"symbol": "INFY",       "sector": "IT services"},
+    {"symbol": "HCLTECH",    "sector": "IT services"},
+    {"symbol": "PERSISTENT", "sector": "IT services"},
+    {"symbol": "LT",         "sector": "Engineering & construction"},
+    {"symbol": "BEL",        "sector": "Defence electronics"},
+    {"symbol": "HAL",        "sector": "Aerospace & defence"},
+    {"symbol": "BAJFINANCE", "sector": "Consumer lending"},
+    {"symbol": "HDFCBANK",   "sector": "Banking"},
+    {"symbol": "DIXON",      "sector": "Electronics manufacturing"},
+    {"symbol": "KAYNES",     "sector": "Electronics manufacturing"},
+    {"symbol": "POLYCAB",    "sector": "Cables & wires"},
+    {"symbol": "TITAN",      "sector": "Jewellery & watches"},
+    {"symbol": "TRENT",      "sector": "Fashion retail"},
+    {"symbol": "SUNPHARMA",  "sector": "Pharmaceuticals"},
+    {"symbol": "INDHOTEL",   "sector": "Hotels"},
+    {"symbol": "ETERNAL",    "sector": "Food delivery & quick commerce"},
+    {"symbol": "DEEPAKNTR",  "sector": "Chemicals"},
+    {"symbol": "MARUTI",     "sector": "Passenger vehicles"}
+  ],
+  "research_demo": ["ASIANPAINT", "CDSL", "VBL", "PAGEIND", "KPITTECH"],
+  "defaults": {
+    "price_move_pct": 4.0,
+    "volume_multiple": 2.0,
+    "volume_lookback_days": 20,
+    "digest_window_hours": 24,
+    "transcripts_per_ledger": 5
+  }
+}

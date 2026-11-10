@@ -1,0 +1,6 @@
+tests
+dev
+pipeline
+.github
+*.md
+!README.md

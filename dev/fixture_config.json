@@ -1,0 +1,18 @@
+{
+  "_note": "FICTIONAL companies for development and tests only.",
+  "portfolio": [
+    {"symbol": "KESTREL",  "sector": "IT services"},
+    {"symbol": "ORBITEMS", "sector": "Electronics manufacturing"},
+    {"symbol": "ASTERDEF", "sector": "Defence electronics"},
+    {"symbol": "NWCABLE",  "sector": "Cables & wires"},
+    {"symbol": "SAFFRON",  "sector": "Consumer lending"}
+  ],
+  "research_demo": ["LOTUSPNT"],
+  "defaults": {
+    "price_move_pct": 4.0,
+    "volume_multiple": 2.0,
+    "volume_lookback_days": 20,
+    "digest_window_hours": 24,
+    "transcripts_per_ledger": 5
+  }
+}
