@@ -17,55 +17,55 @@ actually reported. That ledger is how FINN decides what matters:
 Primary sources only: exchange filings, earnings-call transcripts and exchange-reported
 numbers. No news, broker notes or model memory.
 
+## About the demo data
+
+The deployed app shows a **frozen snapshot of real data taken on 11 Nov 2026 at 3:35 am IST**:
+
+- **Promise ledgers** from the last five earnings calls of 18 NSE companies, plus 5 more prepared for research.
+- **Exchange filings** from the previous 30 days: 234 of them.
+- **Prices**: six months of daily closing prices and volumes.
+
+Times in the app ("the last 24 hours") are measured from that moment, and a note on the
+Today screen says so. Freezing the data keeps the demo stable and inside free-tier limits.
+
+**What stays live:** the Research tab. Type any NSE symbol and FINN reads its transcripts
+and builds the ledger on demand.
+
+**To switch to live data:** go to GitHub, then Actions → finn-data → Run workflow. A full refresh takes about 45 minutes on
+the free tier and turns snapshot mode off. `python -m pipeline.freeze` turns it back on. To refresh
+automatically, add a schedule to `.github/workflows/finn-data.yml`; the file shows how.
+
+**Known gaps in the snapshot:**
+- Trent holds no earnings calls, so it has no promises.
+- HDFC Bank gives no numeric guidance, so it has no promises either.
+- Maruti's older transcripts sit on its own website, which refused the download.
+- Where a results PDF could not be read cleanly, the card uses the exchange's quarterly
+  figures and says so.
+
 ---
 
-## Day 1: prove the data plumbing (do this first)
-
-The build environment could not reach NSE, BSE, Yahoo or screener.in, so every
-fetcher has been tested only against fictional fakes. Before anything else, check them
-from your own machine:
+## Run it yourself
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-pipeline.txt
 export GEMINI_API_KEY=...        # free key from https://aistudio.google.com/apikey
-python -m pipeline.doctor INFY
-```
-
-On Windows (PowerShell), from the folder that contains this README:
-
-```powershell
-python -m venv .venv
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass   # lets this window run the activate script
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements-pipeline.txt
-$env:GEMINI_API_KEY = "paste-your-key-here"
-$env:PYTHONUTF8 = "1"
-python -m pipeline.doctor INFY
-```
-
-Each line should say PASS. If a parser fails, the raw page is saved in `dev/samples/`.
-Fix the parser against that file. The screener and BSE parsers are the most likely to
-need a tweak.
-
-Then build one company and look at it:
-
-```bash
+python -m pipeline.doctor INFY   # checks every data source; saves raw pages to dev/samples on failure
 python -m pipeline.run --mode full --only INFY
-python dev/server.py            # open http://localhost:8000 on your phone or desktop
+python dev/server.py             # http://localhost:8000
 ```
 
-Then the whole portfolio. The first run is paced to stay inside the free tier
-(about 15 requests a minute), so it takes 15–25 minutes:
+On Windows (PowerShell), one script does all of it and publishes the data:
+`powershell -ExecutionPolicy Bypass -File scripts\run-local.ps1` (add `-Doctor` to only check sources).
 
-```bash
-python -m pipeline.run --mode full
-```
+A full refresh of the whole portfolio is paced to stay inside the Gemini free tier, so the
+first run takes 30–50 minutes. A run stops starting new model reads when its time budget
+is spent (`FINN_TIME_BUDGET_MIN`, default 35) and saves what it has; because every read is
+cached, the next run continues where it stopped.
 
 ## Deploy
 
-1. Push this repo to GitHub as a public repository, including `public/data` from your
-   first run.
+1. Push this repo to GitHub (public, so Actions minutes are free).
 2. In the repo settings, add the Actions secret `GEMINI_API_KEY`, and under Actions set
    workflow permissions to "Read and write" so the data job can commit.
    `.github/workflows/finn-data.yml` then refreshes filings hourly during market hours

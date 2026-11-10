@@ -44,13 +44,19 @@ export function target(t) {
 }
 
 // ---- time ---------------------------------------------------------------------
+// In demo-snapshot mode the app's "now" is the moment the snapshot was taken.
+let CLOCK = null;
+export const setNow = (ms) => { CLOCK = ms; };
+export const nowMs = () => CLOCK ?? Date.now();
 const tf = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 const df = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
 const longDate = new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Kolkata" });
-export const today = () => longDate.format(new Date());
+const stamp = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+export const stampOf = (iso) => stamp.format(new Date(iso));
+export const today = () => longDate.format(new Date(nowMs()));
 export function when(iso) {
   if (!iso) return "";
-  const d = new Date(iso), now = new Date();
+  const d = new Date(iso), now = new Date(nowMs());
   const days = Math.floor((now - d) / 864e5);
   const sameDay = df.format(d) === df.format(now);
   if (sameDay) return tf.format(d).replace(" ", "").toLowerCase();
@@ -59,7 +65,7 @@ export function when(iso) {
 }
 export const day = (isoDate) => df.format(new Date(isoDate + "T12:00:00+05:30"));
 export function ago(iso) {
-  const m = Math.round((Date.now() - new Date(iso)) / 6e4);
+  const m = Math.round((nowMs() - new Date(iso)) / 6e4);
   if (m < 60) return `${m} min ago`;
   const h = Math.round(m / 60);
   if (h < 36) return `${h} h ago`;

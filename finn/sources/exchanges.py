@@ -124,7 +124,7 @@ def nse_announcements(symbol: str, start: dt.date, end: dt.date) -> list[dict]:
             "detail": "",
             "raw_category": (a.get("desc") or "").strip(),
             "raw_subcategory": "",
-            "attachment": a.get("attchmntFile") or None,
+            "attachment": a.get("attchmntFile") if str(a.get("attchmntFile") or "").startswith("http") else None,
         })
     return out
 

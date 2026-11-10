@@ -306,3 +306,25 @@ def test_bse_tries_browser_session_then_plain(monkeypatch):
     monkeypatch.setattr(http, "get", fake_get)
     exchanges._bse_get({})
     assert tried == ["browser", "plain"]
+
+
+def test_units_are_normalised():
+    assert ledger.norm_unit("percent") == "%" and ledger.norm_unit("% YoY") == "%"
+    assert ledger.norm_unit("INR crore") == "crore" and ledger.norm_unit("units") == "units"
+
+
+def test_results_card_completed_or_rebuilt_from_table(company):
+    q = company["quarters"]
+    card = {"ok": True, "quarter": "Q2 FY27", "cross_check": True, "ebitda_margin": None, "rows": [
+        {"key": "revenue", "label": "Revenue", "value": 1280, "qoq": {}, "yoy": {}},
+        {"key": "ebitda", "label": "EBITDA", "value": 190, "qoq": {}, "yoy": {}},
+        {"key": "pbt", "label": "PBT", "value": None, "qoq": {}, "yoy": {}},
+        {"key": "pat", "label": "PAT", "value": None, "qoq": {}, "yoy": {}}]}
+    out = financials.complete_from_table(card, q)
+    rows = {r["key"]: r for r in out["rows"]}
+    assert rows["pat"]["value"] == 104 and rows["pat"]["src"] == "table"
+    assert out["filled_from_table"] == ["PBT", "PAT"] and out["ebitda_margin"] == pytest.approx(14.8, abs=0.1)
+    bad = {"ok": True, "quarter": "Q2 FY27", "cross_check": False, "rows": [{"key": "revenue", "label": "Revenue", "value": 17}]}
+    rebuilt = financials.complete_from_table(bad, q)
+    assert rebuilt["source"] == "table" and rebuilt["rows"][0]["value"] == 1280
+    assert rebuilt["rows"][0]["yoy"]["pct"] == pytest.approx((1280 / 1150 - 1) * 100, abs=0.1)

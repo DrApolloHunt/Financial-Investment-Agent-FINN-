@@ -1,7 +1,7 @@
 import * as data from "../data.js";
 import { LABELS } from "../categories.js";
 import { buriedKinds, explaining, group, tier, unusual, windowStart } from "../logic.js";
-import { ago, entry, html, mark, mount, num, pct, raw, sign, target, today, when, link } from "../ui.js";
+import { ago, entry, html, mark, mount, nowMs, num, pct, raw, sign, stampOf, target, today, when, link } from "../ui.js";
 
 const WINDOWS = [["24h", "24 hours"], ["3d", "3 days"], ["7d", "7 days"], ["since", "Since I last looked"]];
 
@@ -14,7 +14,7 @@ export async function todayView(el, ctx, _a, alive) {
       <div class="empty"><b>No filings collected yet.</b>FINN fills this page from exchange filings and prices. The data refresh runs every hour during market hours and after the close.</div>`);
   }
   const s = ctx.settings;
-  const now = Date.now();
+  const now = nowMs();
   const start = windowStart(s.window, now, ctx.session);
   const names = Object.fromEntries(port.companies.map((c) => [c.symbol, c.name]));
 
@@ -41,7 +41,7 @@ export async function todayView(el, ctx, _a, alive) {
   const n = promise.length + material.length + unexplained.length + movedWith.length;
 
   const hero = n === 0 ? "Nothing needs you." : n === 1 ? "1 thing matters." : `${n} things matter.`;
-  const stale = meta?.generated_at && now - new Date(meta.generated_at) > 30 * 3600e3;
+  const stale = !ctx.snapshot && meta?.generated_at && now - new Date(meta.generated_at) > 30 * 3600e3;
 
   mount(el, html`
     <header class="head">
@@ -50,7 +50,8 @@ export async function todayView(el, ctx, _a, alive) {
       <div class="seg" role="group" aria-label="Time window">
         ${WINDOWS.map(([k, label]) => html`<button type="button" data-win="${k}" aria-pressed="${s.window === k}">${label}</button>`)}
       </div>
-      <p class="sub">${s.window === "since" && !ctx.session.start ? "First visit: showing the last 24 hours. " : ""}${meta?.generated_at ? `Data updated ${ago(meta.generated_at)}.` : ""}</p>
+      <p class="sub">${s.window === "since" && !ctx.session.start ? "First visit: showing the last 24 hours. " : ""}${meta?.generated_at && !ctx.snapshot ? `Data updated ${ago(meta.generated_at)}.` : ""}</p>
+      ${ctx.snapshot ? html`<p class="banner">Demo snapshot taken ${stampOf(meta.generated_at)}. Filings and prices are frozen at that moment, so "the last 24 hours" means the 24 hours before it. The Research tab works live on any company.</p>` : ""}
       ${data.FIXTURES ? html`<p class="banner">Sample data: these companies, filings and quotes are fictional.</p>` : ""}
       ${stale ? html`<p class="banner">The last data refresh was ${ago(meta.generated_at)}. Filings since then are not shown.</p>` : ""}
     </header>
@@ -164,6 +165,7 @@ function resultsCard(c) {
       ${mark(p.verdict === "below" ? "slipping" : "on_track", p.verdict)}
       <span><span style="font-family:var(--serif)">${p.statement}</span><br><span class="foot">This quarter, against ${target({ ...p.target, unit: "%" })}</span></span>
       <span class="val ${p.verdict === "below" ? "neg" : "pos"}">${p.value.toFixed(1)}%</span></div>`)}</div>` : ""}
+    ${c.filled_from_table?.length ? html`<p class="foot">${c.filled_from_table.join(", ").replace(/, ([^,]*)$/, " and $1")} taken from the exchange's quarterly data, because the filing could not be read cleanly for ${c.filled_from_table.length > 1 ? "them" : "it"}.</p>` : ""}
     ${c.cross_check === true ? html`<p class="foot">Revenue and profit match the exchange's quarterly data.</p>`
       : c.cross_check === false ? html`<p class="foot neg">These numbers differ from the exchange's quarterly data. Check the filing.</p>` : ""}
     ${c.note ? html`<p class="foot">${c.note}</p>` : ""}`;

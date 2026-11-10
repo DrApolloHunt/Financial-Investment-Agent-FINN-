@@ -1,6 +1,6 @@
 import * as data from "../data.js";
 import { CATEGORIES } from "../categories.js";
-import { ago, html, mount, num } from "../ui.js";
+import { ago, html, mount, num, stampOf } from "../ui.js";
 
 export async function settingsView(el, ctx, _a, alive) {
   const meta = await data.meta().catch(() => null);
@@ -47,7 +47,7 @@ export async function settingsView(el, ctx, _a, alive) {
 
     ${meta ? html`<section class="section"><h2>Data and cost</h2>
       <table class="usage"><tbody>
-        <tr><td>Last refresh</td><td>${ago(meta.generated_at)}</td></tr>
+        <tr><td>${meta.snapshot ? "Demo snapshot taken" : "Last refresh"}</td><td>${meta.snapshot ? stampOf(meta.generated_at) : ago(meta.generated_at)}</td></tr>
         ${Object.entries(total).map(([m, n]) => html`<tr><td>${m} calls, recent runs</td><td>${num(n)}</td></tr>`)}
         <tr><td>Tokens processed</td><td>${num(tokens)}</td></tr>
         <tr><td>Spend</td><td>₹0 (free tier)</td></tr>

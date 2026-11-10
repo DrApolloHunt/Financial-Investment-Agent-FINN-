@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT))
 
 from finn import gemini, ledger, moves, readers, triage  # noqa: E402
 from finn.classify import classify_batch_with_model, is_routine  # noqa: E402
-from finn.financials import cross_check, results_card  # noqa: E402
+from finn.financials import complete_from_table, cross_check, results_card  # noqa: E402
 from finn.http import FetchError  # noqa: E402
 from finn.sources import exchanges, prices, screener  # noqa: E402
 
@@ -184,6 +184,7 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
                 if ext.get("is_results_document"):
                     card = results_card(ext)
                     card["cross_check"] = cross_check(card, co.get("quarters") or {})
+                    card = complete_from_table(card, co.get("quarters") or {}, bool(co.get("is_lender")))
                     card["promise_check"] = triage.promise_check(card, open_p)
                     it["card"] = {"type": "results", **card}
                 else:
@@ -359,7 +360,7 @@ def main(argv=None):
     hist.append({"at": dt.datetime.now(IST).isoformat(timespec="seconds"), "mode": a.mode, **usage})
     meta.update({
         "generated_at": dt.datetime.now(IST).isoformat(timespec="seconds"),
-        "mode": a.mode, "seconds": round(time.time() - t0, 1),
+        "mode": a.mode, "seconds": round(time.time() - t0, 1), "snapshot": False,
         "status": {k: v for k, v in status.items() if k != "errors"},
         "errors": status["errors"][-40:],
         "usage_last_run": usage, "usage_history": hist,

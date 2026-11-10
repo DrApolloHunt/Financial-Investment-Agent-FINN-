@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .periods import qkey, year_ago
+from .periods import prev_quarter, qkey, year_ago
 
 UNIT_TO_CRORE = {"crore": 1.0, "crores": 1.0, "cr": 1.0, "lakh": 0.01, "lakhs": 0.01,
                  "million": 0.1, "millions": 0.1, "billion": 100.0, "thousand": 0.0001,
@@ -42,13 +42,17 @@ def _f(x) -> Optional[float]:
 def headline_numbers(period: dict, factor: float, lender: bool) -> dict:
     rev = _f(period.get("revenue_from_operations"))
     exp = _f(period.get("total_expenses"))
-    fin = _f(period.get("finance_costs")) or 0.0
-    dep = _f(period.get("depreciation")) or 0.0
+    fin = _f(period.get("finance_costs"))
+    dep = _f(period.get("depreciation"))
     oth = _f(period.get("other_income")) or 0.0
+    parts_read = fin is not None and dep is not None   # EBITDA needs both; never assume zero
+    fin, dep = fin or 0.0, dep or 0.0
     pbt = _f(period.get("pbt"))
     pat = _f(period.get("pat_attributable_to_owners")) or _f(period.get("pat"))
     if lender:
         ebitda = _f(period.get("operating_profit_before_provisions"))
+    elif not parts_read:
+        ebitda = None
     elif rev is not None and exp is not None:
         ebitda = rev - exp + fin + dep            # operating: excludes other income
     elif pbt is not None:
@@ -106,6 +110,63 @@ def cross_check(card: dict, quarters: dict) -> Optional[bool]:
         if abs(a - b) > max(1.0, 0.03 * abs(b)):
             ok = False
     return ok
+
+
+def complete_from_table(card: dict, quarters: dict, lender: bool = False) -> dict:
+    """Make a results card trustworthy using the exchange-derived quarterly table.
+
+    - If the filing could not be read, or its numbers disagree with the exchange
+      data, the card is rebuilt from the table and says so.
+    - Otherwise any line the model left blank is filled from the table for the
+      same quarter, with its QoQ/YoY from the table too.
+    Lenders' pre-provision profit is never filled: the table has no such line.
+    """
+    q = card.get("quarter")
+    periods = (quarters or {}).get("periods") or []
+    rows = (quarters or {}).get("rows") or {}
+    if not q or q not in periods:
+        return card
+
+    def val(key, quarter):
+        if quarter not in periods:
+            return None
+        arr = rows.get(key) or []
+        i = periods.index(quarter)
+        return arr[i] if i < len(arr) else None
+
+    labels = (("revenue", "Revenue"), ("ebitda", "PPOP" if lender else "EBITDA"), ("pbt", "PBT"), ("pat", "PAT"))
+    if not card.get("ok") or card.get("cross_check") is False:
+        out_rows = []
+        for key, label in labels:
+            v = None if (lender and key == "ebitda") else val(key, q)
+            out_rows.append({"key": key, "label": label, "value": v, "src": "table",
+                             "qoq": pct_change(v, None if v is None else val(key, prev_quarter(q))),
+                             "yoy": pct_change(v, None if v is None else val(key, year_ago(q)))})
+        rev, eb = val("revenue", q), val("ebitda", q)
+        return {**card, "ok": True, "rows": out_rows, "lender": lender, "unit": "₹ crore",
+                "ebitda_margin": round(eb / rev * 100, 1) if rev and eb is not None and not lender else None,
+                "source": "table", "cross_check": None,
+                "note": "From the exchange's quarterly data: the filing itself could not be read reliably."}
+    filled = []
+    for r in card.get("rows", []):
+        if lender and r["key"] == "ebitda":
+            continue
+        v = val(r["key"], q)
+        mine = r.get("value")
+        off = mine is not None and v and abs(mine / v - 1) > 0.08   # filing line disagrees with the exchange
+        if mine is None or off:
+            if v is not None:
+                r.update({"value": v, "src": "table", "qoq": pct_change(v, val(r["key"], prev_quarter(q))),
+                          "yoy": pct_change(v, val(r["key"], year_ago(q)))})
+                filled.append(r["label"])
+    if filled:
+        card["filled_from_table"] = filled
+        if not lender:
+            rv = next((r["value"] for r in card["rows"] if r["key"] == "revenue"), None)
+            ev = next((r["value"] for r in card["rows"] if r["key"] == "ebitda"), None)
+            if rv and ev is not None:
+                card["ebitda_margin"] = round(ev / rv * 100, 1)
+    return card
 
 
 # ---- quarterly table helpers (delivered side of the ledger) ---------------

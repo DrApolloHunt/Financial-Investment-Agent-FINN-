@@ -1,11 +1,11 @@
 import * as data from "../data.js";
-import { countsLine, html, mount, pct, rupees, sign, strip, STATUS, STATUS_ORDER, mark } from "../ui.js";
+import { countsLine, html, mount, nowMs, pct, rupees, sign, strip, STATUS, STATUS_ORDER, mark } from "../ui.js";
 
 export async function ledgersView(el, ctx, _a, alive) {
   const [port, feed] = await Promise.all([data.portfolio(), data.feed().catch(() => ({ items: [] }))]);
   if (!alive()) return;
   // companies with a promise-moving filing in the last 3 days first, then by trouble
-  const recent = new Set(feed.items.filter((it) => it.tier === "promise" && Date.now() - new Date(it.ts) < 3 * 864e5).map((it) => it.symbol));
+  const recent = new Set(feed.items.filter((it) => it.tier === "promise" && nowMs() - new Date(it.ts) < 3 * 864e5).map((it) => it.symbol));
   const trouble = (c) => (c.counts?.missed || 0) * 3 + (c.counts?.slipping || 0) * 2 + (c.counts?.dropped || 0) * 2;
   const list = [...port.companies].sort((a, b) => (recent.has(b.symbol) - recent.has(a.symbol)) || trouble(b) - trouble(a) || a.name.localeCompare(b.name));
   const detail = await Promise.all(list.map((c) => data.company(c.symbol).catch(() => null)));

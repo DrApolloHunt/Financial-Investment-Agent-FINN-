@@ -117,6 +117,17 @@ def _norm_horizon_end(p: dict) -> Optional[str]:
     return None
 
 
+def norm_unit(u) -> str:
+    """'percent', 'per cent', '% YoY' -> '%'; 'Rs crore', 'INR cr' -> 'crore'."""
+    t = str(u or "").strip()
+    low = t.lower()
+    if "%" in t or "percent" in low or "per cent" in low:
+        return "%"
+    if "crore" in low or low in ("cr", "rs cr", "inr cr"):
+        return "crore"
+    return t
+
+
 def _promise_key(quarter: str) -> str:
     fy, q = qkey(quarter)
     return f"{fy:02d}Q{q}"
@@ -159,7 +170,7 @@ def apply_call(state: dict, quarter: str, url: str, result: dict, model: str = "
             "metric": n.get("metric") if n.get("metric") in METRICS else "other",
             "basis": n.get("basis") or "other",
             "direction": n.get("direction") or "higher_is_better",
-            "target": {"low": n.get("target_low"), "high": n.get("target_high"), "unit": n.get("unit") or ""},
+            "target": {"low": n.get("target_low"), "high": n.get("target_high"), "unit": norm_unit(n.get("unit"))},
             "horizon": (n.get("horizon") or "").strip()[:60],
             "specificity": n.get("specificity") or "soft",
             "made_in": quarter, "source_url": url, "history": [],
@@ -217,7 +228,7 @@ def assess(p: dict, quarters: dict, latest: Optional[str]) -> dict:
     last = explicit[-1] if explicit else None
     reported = next((e for e in reversed(hist) if e.get("reported") is not None), None)
 
-    unit = (p["target"].get("unit") or "").strip()
+    unit = norm_unit(p["target"].get("unit"))
     actual = None
     if p["metric"] in ("revenue_growth", "pat_growth", "ebitda_margin") and unit in ("", "%"):
         actual = actual_for(p["metric"], p.get("basis") or "", p.get("horizon_end"), quarters, latest,

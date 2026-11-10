@@ -1,5 +1,5 @@
 import * as data from "./data.js";
-import { html, mount } from "./ui.js";
+import { html, mount, setNow } from "./ui.js";
 import { CATEGORIES } from "./categories.js";
 import { todayView } from "./views/today.js";
 import { ledgersView } from "./views/ledgers.js";
@@ -48,12 +48,15 @@ async function route() {
 }
 
 window.addEventListener("hashchange", route);
-route();
+data.meta().then((m) => {
+  ctx.snapshot = Boolean(m?.snapshot && m.generated_at);
+  if (ctx.snapshot) setNow(Date.parse(m.generated_at));
+}).catch(() => {}).finally(route);
 
 // A tab left open stays current: refetch when it comes back after 10 minutes,
 // and every 15 minutes while it is visible. Data refreshes hourly upstream.
 let loadedAt = Date.now();
-const refresh = () => { data.reset(); loadedAt = Date.now(); if (!location.hash.startsWith("#/research")) route(); };
+const refresh = () => { if (ctx.snapshot) return; data.reset(); loadedAt = Date.now(); if (!location.hash.startsWith("#/research")) route(); };
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && Date.now() - loadedAt > 10 * 60e3) refresh();
 });
