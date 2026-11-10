@@ -91,3 +91,10 @@ def test_no_key(monkeypatch):
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     with pytest.raises(gemini.NoKey):
         gemini.generate_json("classify", [{"text": "x"}])
+
+
+def test_high_demand_503_is_retried_on_same_model(monkeypatch):
+    seq = [Resp(503, {"error": {"message": "high demand"}}), ok({"e": 5})]
+    monkeypatch.setattr(gemini.requests, "post", lambda url, **kw: seq.pop(0))
+    data, model = gemini.generate_json("read_pdf", [{"text": "x"}])
+    assert data == {"e": 5} and model == gemini.ROUTES["read_pdf"][0]

@@ -41,6 +41,15 @@ def log(*a):
     print(time.strftime("%H:%M:%S"), *a, flush=True)
 
 
+# A run stops starting new model reads once its time budget is spent, then writes
+# everything it has. Every read is cached, so the next run continues from there.
+DEADLINE = time.time() + 60 * float(os.environ.get("FINN_TIME_BUDGET_MIN", "35"))
+
+
+def time_left() -> bool:
+    return time.time() < DEADLINE
+
+
 def load(path: Path, default):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -60,9 +69,11 @@ def save(path: Path, obj):
 def build_company(sym: str, sector: str, use_ai: bool, n_calls: int, status: dict) -> dict:
     path = DATA / "companies" / f"{sym}.json"
     old = load(path, {})
+    t0 = time.time()
     try:
         co = screener.fetch_company(sym)
         status["screener_ok"] += 1
+        log(f"  {sym} screener: {len(co['quarters']['periods'])} quarters, {len(co['transcripts'])} transcripts ({time.time()-t0:.0f}s)")
     except Exception as e:  # keep yesterday's data rather than blanking the company
         status["errors"].append(f"{sym} screener: {e}")
         if old:
@@ -70,25 +81,35 @@ def build_company(sym: str, sector: str, use_ai: bool, n_calls: int, status: dic
         co = {"symbol": sym, "name": sym, "quarters": {"periods": [], "rows": {}}, "transcripts": [],
               "annual_reports": [], "bse_code": None, "basis": None}
     co["sector"] = sector
+    t0 = time.time()
     try:
         co["prices"] = prices.daily(sym, "6mo")
         status["prices_ok"] += 1
+        log(f"  {sym} prices: {len(co['prices'])} days ({time.time()-t0:.0f}s)")
     except Exception as e:
         status["errors"].append(f"{sym} prices: {e}")
+        log(f"  {sym} prices failed ({time.time()-t0:.0f}s): {str(e)[:120]}")
         co["prices"] = old.get("prices", [])
 
     latest = co["quarters"]["periods"][-1] if co["quarters"]["periods"] else None
     calls = list(reversed(co["transcripts"][:n_calls]))  # oldest -> newest
     state = ledger.new_state(sym, co["name"])
-    if use_ai and calls:
+    if use_ai and calls and not time_left() and old.get("ledger"):
+        co["ledger"] = old["ledger"]          # out of time: keep yesterday's ledger
+    elif use_ai and calls:
         for c in calls:
+            if not time_left():
+                status["errors"].append(f"{sym}: time budget spent before {c['quarter']} call; continues next run")
+                break
             try:
                 state = ledger.read_call(state, c["quarter"], c["url"], exchanges.download_attachment)
                 log(f"  {sym} {c['quarter']}: {len(state['promises'])} promises so far")
             except Exception as e:
                 status["errors"].append(f"{sym} transcript {c['quarter']}: {e}")
                 log(f"  {sym} {c['quarter']} transcript failed: {e}")
+        t0 = time.time()
         co["ledger"] = ledger.finalize(state, co["quarters"], latest, use_model=True)
+        log(f"  {sym} verdicts: {co['ledger'].get('verdict_model') or 'rules only'} ({time.time()-t0:.0f}s)")
     elif old.get("ledger"):
         co["ledger"] = old["ledger"]
     else:
@@ -151,7 +172,7 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
     todo.sort(key=prio)
     used = 0
     for it in todo:
-        if not use_ai or used >= budget:
+        if not use_ai or used >= budget or not time_left():
             break
         kind = triage.needs_reading(it)
         co = companies.get(it["symbol"], {})

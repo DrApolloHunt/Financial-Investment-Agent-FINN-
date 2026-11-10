@@ -213,6 +213,9 @@ def generate_json(task: str, parts: list[dict], schema: Optional[dict] = None,
             if r.status_code == 404:
                 METER.fallbacks.append(f"{model} not available -> next model")
                 break
+            if r.status_code in (500, 503) and attempt < 2:
+                time.sleep(8 * (attempt + 1))  # "high demand" spikes are short
+                continue
             if r.status_code == 400 and use_schema and "schema" in json.dumps(err).lower():
                 use_schema = False  # tolerate schema dialect differences
                 continue
