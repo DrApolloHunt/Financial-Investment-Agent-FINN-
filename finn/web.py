@@ -1,14 +1,33 @@
-"""Tiny helpers shared by the Vercel Python functions in /api and the local
-dev server. Standard library only on the request path."""
+"""The research API: three endpoints, served by one WSGI app (app.py).
+
+  GET  /api/company?t=SYMBOL   identity, quarterly table, transcript links, prices
+  POST /api/ledger_step        read ONE earnings-call transcript into the ledger
+  POST /api/ledger_finalize    statuses (rules) + verdicts (one reasoning call)
+
+The browser calls ledger_step once per transcript, oldest first, so the investor
+watches the ledger fill in. Standard library only on the request path.
+"""
 from __future__ import annotations
 
 import json
+import mimetypes
 import re
+import time
 import traceback
-from http.server import BaseHTTPRequestHandler
-from urllib.parse import parse_qs, urlparse
+from pathlib import Path
+from urllib.parse import parse_qs
 
+from . import ledger
+from .sources import exchanges, prices, screener
+
+ROOT = Path(__file__).resolve().parent.parent
+PUBLIC = ROOT / "public"
 SYMBOL = re.compile(r"^[A-Z0-9&\-]{1,20}$")
+N_CALLS = 5
+MAX_BODY = 2_000_000
+
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 class ApiError(Exception):
@@ -23,51 +42,137 @@ def symbol(raw) -> str:
     return s
 
 
-def make_handler(get=None, post=None):
-    """Build a BaseHTTPRequestHandler class from plain functions.
+# ---- endpoints -------------------------------------------------------------------
 
-    get(query: dict) -> obj ; post(body: dict) -> obj
-    """
-    class handler(BaseHTTPRequestHandler):
-        def _send(self, status, obj):
-            body = json.dumps(obj, ensure_ascii=False).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+def company(q: dict) -> dict:
+    """Any NSE company, on demand. No model call: the cheap first step."""
+    sym = symbol(q.get("t"))
+    try:
+        co = screener.fetch_company(sym)
+    except Exception as e:
+        if getattr(e, "status", None) == 404:
+            raise ApiError(404, f"{sym} was not found. Check the NSE symbol.")
+        raise
+    try:
+        co["prices"] = prices.daily(sym, "6mo")
+    except Exception:
+        co["prices"] = []
+    co["transcripts"] = co["transcripts"][:N_CALLS]
+    co["latest_quarter"] = co["quarters"]["periods"][-1] if co["quarters"]["periods"] else None
+    return co
 
-        def _run(self, fn, arg):
-            if fn is None:
-                return self._send(405, {"error": "method not allowed"})
-            try:
-                self._send(200, fn(arg))
-            except ApiError as e:
-                self._send(e.status, {"error": e.message})
-            except Exception as e:  # never leak a stack trace to the client
-                traceback.print_exc()
-                name = type(e).__name__
-                msg = {"NoKey": "Server has no GEMINI_API_KEY configured.",
-                       "FetchError": f"A data source did not respond: {str(e)[:160]}",
-                       "GeminiError": f"The AI model is unavailable right now (free-tier limits?): {str(e)[:160]}"}.get(name, f"{name}: {str(e)[:160]}")
-                self._send(502, {"error": msg})
 
-        def do_GET(self):
-            q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
-            self._run(get, q)
+_listed: dict[str, tuple[float, set]] = {}
 
-        def do_POST(self):
-            n = int(self.headers.get("Content-Length") or 0)
-            if n > 2_000_000:
-                return self._send(413, {"error": "request too large"})
-            try:
-                body = json.loads(self.rfile.read(n) or b"{}")
-            except json.JSONDecodeError:
-                return self._send(400, {"error": "invalid JSON"})
-            self._run(post, body)
 
-        def log_message(self, *a):  # quiet
-            pass
+def listed_transcripts(sym: str) -> set:
+    """The server only fetches transcript URLs screener.in lists for this company,
+    never an arbitrary URL from the browser. Memoised per warm instance."""
+    hit = _listed.get(sym)
+    if hit and time.time() - hit[0] < 900:
+        return hit[1]
+    urls = {t["url"] for t in screener.fetch_company(sym)["transcripts"]}
+    _listed[sym] = (time.time(), urls)
+    return urls
 
-    return handler
+
+def ledger_step(body: dict) -> dict:
+    sym = symbol(body.get("symbol"))
+    url, quarter = body.get("url"), body.get("quarter")
+    if not url or not str(url).startswith("https://") or not quarter:
+        raise ApiError(400, "Need a transcript url and quarter.")
+    if url not in listed_transcripts(sym):
+        raise ApiError(400, "That transcript is not listed for this company.")
+    state = body.get("state") or ledger.new_state(sym, body.get("name") or sym)
+    if state.get("symbol") != sym:
+        raise ApiError(400, "State belongs to a different company.")
+    state = ledger.read_call(state, quarter, url, exchanges.download_attachment)
+    new = [p for p in state["promises"] if p["made_in"] == quarter]
+    return {"state": state, "found": len(new),
+            "updated": sum(1 for p in state["promises"] for e in p["history"]
+                           if e["quarter"] == quarter and e["kind"] != "not_mentioned")}
+
+
+def ledger_finalize(body: dict) -> dict:
+    state = body.get("state")
+    if not state or "promises" not in state:
+        raise ApiError(400, "Need a ledger state.")
+    return ledger.finalize(state, body.get("quarters") or {}, body.get("latest"), use_model=True)
+
+
+ROUTES = {
+    ("GET", "/api/company"): company,
+    ("POST", "/api/ledger_step"): ledger_step,
+    ("POST", "/api/ledger_finalize"): ledger_finalize,
+}
+
+
+def run(fn, arg) -> tuple[int, dict]:
+    """Call an endpoint; turn failures into plain-language JSON errors."""
+    try:
+        return 200, fn(arg)
+    except ApiError as e:
+        return e.status, {"error": e.message}
+    except Exception as e:  # never leak a stack trace to the client
+        traceback.print_exc()
+        name = type(e).__name__
+        msg = {"NoKey": "Server has no GEMINI_API_KEY configured.",
+               "FetchError": f"A data source did not respond: {str(e)[:160]}",
+               "GeminiError": f"The AI model is unavailable right now (free-tier limits?): {str(e)[:160]}"}.get(name, f"{name}: {str(e)[:160]}")
+        return 502, {"error": msg}
+
+
+# ---- WSGI app ----------------------------------------------------------------------
+
+def _respond(start_response, status: int, body: bytes, ctype: str, cache: str = "no-store"):
+    reason = {200: "OK", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed",
+              413: "Payload Too Large", 502: "Bad Gateway"}.get(status, "OK")
+    start_response(f"{status} {reason}", [("Content-Type", ctype), ("Content-Length", str(len(body))),
+                                          ("Cache-Control", cache)])
+    return [body]
+
+
+def _json(start_response, status: int, obj) -> list:
+    return _respond(start_response, status, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
+                    "application/json; charset=utf-8")
+
+
+def _static(path: str, start_response) -> list:
+    """Fallback for the static app (the platform's CDN normally serves public/)."""
+    rel = path.lstrip("/") or "index.html"
+    target = (PUBLIC / rel).resolve()
+    if PUBLIC.resolve() not in target.parents and target != PUBLIC.resolve():
+        return _respond(start_response, 404, b"Not found", "text/plain")
+    if target.is_dir():
+        target = target / "index.html"
+    if not target.is_file():
+        return _respond(start_response, 404, b"Not found", "text/plain")
+    ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+    if ctype.startswith("text/") or ctype.endswith(("json", "javascript")):
+        ctype += "; charset=utf-8"
+    cache = "public, max-age=60" if "/data/" in path else "public, max-age=300"
+    return _respond(start_response, 200, target.read_bytes(), ctype, cache)
+
+
+def app(environ, start_response):
+    method = environ.get("REQUEST_METHOD", "GET").upper()
+    path = (environ.get("PATH_INFO") or "/").rstrip("/") or "/"
+    fn = ROUTES.get((method, path))
+    if fn is None and path.startswith("/api/"):
+        known = any(p == path for (_, p) in ROUTES)
+        return _json(start_response, 405 if known else 404,
+                     {"error": "method not allowed" if known else "no such endpoint"})
+    if fn is None:
+        return _static(path, start_response)
+    if method == "GET":
+        arg = {k: v[0] for k, v in parse_qs(environ.get("QUERY_STRING", "")).items()}
+    else:
+        n = int(environ.get("CONTENT_LENGTH") or 0)
+        if n > MAX_BODY:
+            return _json(start_response, 413, {"error": "request too large"})
+        try:
+            arg = json.loads(environ["wsgi.input"].read(n) or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return _json(start_response, 400, {"error": "invalid JSON"})
+    status, obj = run(fn, arg)
+    return _json(start_response, status, obj)

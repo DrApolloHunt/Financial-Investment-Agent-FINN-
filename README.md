@@ -70,9 +70,9 @@ cached, the next run continues where it stopped.
    workflow permissions to "Read and write" so the data job can commit.
    `.github/workflows/finn-data.yml` then refreshes filings hourly during market hours
    and runs a full refresh after the close.
-3. In Vercel, import the repo with framework preset "Other". Add the environment variable
-   `GEMINI_API_KEY` and deploy. `vercel.json` serves `public/` and runs `api/*.py` as
-   Python functions.
+3. In Vercel, import the repo with the **Python** preset. Add the environment variable
+   `GEMINI_API_KEY` and deploy. `app.py` is the entry point: one WSGI app serving the
+   research API at `/api/*`; the static app in `public/` is served by Vercel's CDN.
 4. Check `https://<your-app>/api/company?t=INFY` returns JSON, then open the app on a
    phone.
 
@@ -85,9 +85,10 @@ pushes the data in one step.
 ```
 GitHub Action (hourly)                                    Vercel
   pipeline/run.py                                           public/  static app (no build step)
-    screener.in  -> quarterly numbers, transcript links     api/company.py          any NSE ticker
-    BSE / NSE    -> filings                                 api/ledger_step.py      reads one call
-    Yahoo        -> end-of-day price and volume             api/ledger_finalize.py  rules + verdict
+    screener.in  -> quarterly numbers, transcript links     app.py -> finn/web.py:
+    BSE / NSE    -> filings                                   GET  /api/company          any NSE ticker
+    Yahoo        -> end-of-day price and volume               POST /api/ledger_step      reads one call
+                                                              POST /api/ledger_finalize  rules + verdict
     Gemini       -> reads PDFs (cached forever)
   writes public/data/*.json  --commit-->  redeploy
 ```
@@ -120,7 +121,7 @@ pipeline and API run end to end offline. None of it is deployed.
 
 ```
 finn/            library: sources, Gemini client, classifier, ledger, triage, maths
-api/             Vercel functions for on-demand research
+app.py           Vercel entry point (WSGI app: research API, static fallback)
 pipeline/        run.py (scheduled refresh), doctor.py (day-1 checks)
 public/          the app: index.html, css/, js/ (no framework, no build)
 config/          portfolio and announcement categories
