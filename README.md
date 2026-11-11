@@ -1,5 +1,20 @@
 # FINN: a promise ledger for investors
 
+**Live demo:** https://financial-investment-agent-finn.vercel.app (best on a phone)
+
+<table>
+  <tr>
+    <td><img src="docs/today.png" width="250" alt="Today: results and filings that move a promise, the rest buried"></td>
+    <td><img src="docs/ledger.png" width="250" alt="Dixon's ledger: a missed promise with the quote and the call where management said it was missed"></td>
+    <td><img src="docs/ledgers.png" width="250" alt="Ledgers: one mark per promise for every company"></td>
+  </tr>
+  <tr>
+    <td>Today: what moved a promise, the rest buried</td>
+    <td>A company's ledger: promised, then said missed</td>
+    <td>Every company's track record at a glance</td>
+  </tr>
+</table>
+
 FINN keeps a ledger of what each company's management promised on its earnings calls
 (growth, margins, capacity, orders, dates) and checks every promise against what was
 actually reported. That ledger is how FINN decides what matters:
