@@ -9,7 +9,7 @@ shots = [
     ("today-buried", "/?fixtures#/", "[data-win='7d']|[data-bury]"),
     ("today-dates", "/?fixtures#/", "[data-win='custom']"),
     ("ledgers", "/?fixtures#/ledgers", None),
-    ("company", "/?fixtures#/c/NWCABLE", ".row.tap > .b"),
+    ("company", "/?fixtures#/c/NWCABLE", ".prow > .b"),
     ("research", "/?fixtures#/research/LOTUSPNT", None),
     ("settings", "/?fixtures#/settings", None),
     ("research-live", "/?fixtures#/research/MERIDIAN", None),

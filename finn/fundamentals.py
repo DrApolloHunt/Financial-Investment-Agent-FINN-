@@ -131,10 +131,11 @@ def summarize(co: dict) -> Optional[dict]:
         pairs = [(c, p) for c, p in zip(cfo, cpat) if c is not None and p is not None]
         if pairs and sum(p for _, p in pairs) > 0:
             conv = round(sum(c for c, _ in pairs) / sum(p for _, p in pairs) * 100)
-            cash["conversion"] = conv
             if lender:
-                cash["notes"].append("Operating cash flow of a lender swings with loan growth, so cash conversion says little here.")
+                # a lender's operating cash flow is mostly loan growth; a ratio to profit would mislead
+                cash["notes"].append("For a lender, operating cash flow mostly reflects how fast the loan book grew, so it is not compared with profit here.")
             else:
+                cash["conversion"] = conv
                 verdict = ("profits are turning into cash" if conv >= 90 else
                            "most profit turns into cash" if conv >= 70 else
                            "a gap between profit and cash worth checking")

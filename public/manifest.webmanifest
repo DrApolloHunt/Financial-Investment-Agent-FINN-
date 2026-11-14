@@ -4,8 +4,8 @@
   "description": "What management promised, and what moved it today.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FCFCFA",
-  "theme_color": "#FCFCFA",
+  "background_color": "#F2F3F7",
+  "theme_color": "#5B2CF0",
   "icons": [
     {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml"},
     {"src": "/icon-180.png", "sizes": "180x180", "type": "image/png"},

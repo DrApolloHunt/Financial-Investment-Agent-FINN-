@@ -4,14 +4,16 @@
 
 <table>
   <tr>
-    <td><img src="docs/today.png" width="250" alt="Today: results and filings that move a promise, the rest buried"></td>
-    <td><img src="docs/ledger.png" width="250" alt="Dixon's ledger: a missed promise with the quote and the call where management said it was missed"></td>
-    <td><img src="docs/ledgers.png" width="250" alt="Ledgers: one mark per promise for every company"></td>
+    <td><img src="docs/today.png" width="200" alt="Today: the filings that matter as cards, the rest buried"></td>
+    <td><img src="docs/ledger.png" width="200" alt="Bharat Electronics: FINN's read and the promise ledger"></td>
+    <td><img src="docs/bullbear.png" width="200" alt="Bull and bear cases argued from the company's own numbers and promises"></td>
+    <td><img src="docs/ledgers.png" width="200" alt="Ledgers: every company's promises at a glance, filterable"></td>
   </tr>
   <tr>
     <td>Today: what moved a promise, the rest buried</td>
-    <td>A company's ledger: promised, then said missed</td>
-    <td>Every company's track record at a glance</td>
+    <td>A company: FINN's read, then every promise</td>
+    <td>Bull vs bear, argued from the page</td>
+    <td>Every company's track record</td>
   </tr>
 </table>
 
@@ -23,22 +25,36 @@ actually reported. That ledger is how FINN decides what matters:
   promises. Any filing that bears on a promise comes next. After that come the filing
   categories you care about. Everything else is buried, counted and one tap away. Price
   or volume moves beyond your thresholds are paired with the filings that explain them,
-  and a move with no filing behind it is shown on its own.
+  and a move with no filing behind it is shown on its own. The window is the last 24
+  hours, 3 or 7 days, since your last visit, or any dates you pick. Management changes
+  carry the appointee's background from the filing; when the filing has none, FINN
+  looks it up on the web and labels it as such, with its sources.
 - **Pull.** Type any NSE symbol. FINN reads the last five earnings-call transcripts,
   lists the promises, follows each one through later calls (repeated, raised, cut,
   delivered, or quietly dropped), and checks the numeric ones against exchange-reported
-  results.
+  results. It also reads the latest annual report for what the business does and how
+  its revenue splits.
+
+Each company page then has, in order: the promise ledger and a credibility read; a
+bull case and a bear case argued only from that page's facts; the business snapshot;
+ten years of revenue, profit and margins with key ratios; the balance sheet (debt,
+interest cover, working-capital days); and cash quality (operating cash against
+reported profit, year by year). The figures are computed in code from exchange-filed
+numbers, not by the model.
 
 Primary sources only: exchange filings, earnings-call transcripts and exchange-reported
 numbers. No news, broker notes or model memory.
 
 ## About the demo data
 
-The deployed app shows a **frozen snapshot of real data taken on 11 Nov 2026 at 3:35 am IST**:
+The deployed app shows a **frozen snapshot of real data as of 13 Nov 2026, 6:32 pm IST**,
+just after the last filing before the data was collected on 14 Nov:
 
 - **Promise ledgers** from the last five earnings calls of 18 NSE companies, plus 5 more prepared for research.
-- **Exchange filings** from the previous 30 days: 234 of them.
+- **Exchange filings** from the previous 30 days: 214 of them.
 - **Prices**: six months of daily closing prices and volumes.
+- **Company pages**: business snapshots read from each latest annual report, bull and bear
+  cases, ten-year figures, balance sheet and cash quality.
 
 Times in the app ("the last 24 hours") are measured from that moment, and a note on the
 Today screen says so. Freezing the data keeps the demo stable and inside free-tier limits.
@@ -47,7 +63,8 @@ Today screen says so. Freezing the data keeps the demo stable and inside free-ti
 and builds the ledger on demand.
 
 **To switch to live data:** go to GitHub, then Actions → finn-data → Run workflow. A full refresh takes about 45 minutes on
-the free tier and turns snapshot mode off. `python -m pipeline.freeze` turns it back on. To refresh
+the free tier and turns snapshot mode off. `python -m pipeline.freeze` turns it back on
+(`--latest` sets the clock just after the newest filing). To refresh
 automatically, add a schedule to `.github/workflows/finn-data.yml`; the file shows how.
 
 **Known gaps in the snapshot:**
@@ -56,6 +73,10 @@ automatically, add a schedule to `.github/workflows/finn-data.yml`; the file sho
 - Maruti's older transcripts sit on its own website, which refused the download.
 - Where a results PDF could not be read cleanly, the card uses the exchange's quarterly
   figures and says so.
+- The bull and bear cases in this snapshot were written by Flash-Lite: Flash's free daily
+  quota was already spent on the day of the run.
+- Five "worth knowing" filings from 2–12 Nov were not read before the run's time budget
+  ran out, so they show the exchange's own headline instead of a one-line summary.
 
 ---
 
@@ -83,8 +104,8 @@ cached, the next run continues where it stopped.
 1. Push this repo to GitHub (public, so Actions minutes are free).
 2. In the repo settings, add the Actions secret `GEMINI_API_KEY`, and under Actions set
    workflow permissions to "Read and write" so the data job can commit.
-   `.github/workflows/finn-data.yml` then refreshes filings hourly during market hours
-   and runs a full refresh after the close.
+   `.github/workflows/finn-data.yml` runs when you start it (Actions → finn-data → Run
+   workflow); add the schedule shown in the file to refresh automatically.
 3. In Vercel, import the repo with the **Python** preset. Add the environment variable
    `GEMINI_API_KEY` and deploy. `app.py` is the entry point: one WSGI app serving the
    research API at `/api/*`; the static app in `public/` is served by Vercel's CDN.
@@ -98,22 +119,25 @@ pushes the data in one step.
 ## How it is built
 
 ```
-GitHub Action (hourly)                                    Vercel
+GitHub Action (on demand)                                 Vercel
   pipeline/run.py                                           public/  static app (no build step)
-    screener.in  -> quarterly numbers, transcript links     app.py -> finn/web.py:
-    BSE / NSE    -> filings                                   GET  /api/company          any NSE ticker
-    Yahoo        -> end-of-day price and volume               POST /api/ledger_step      reads one call
-                                                              POST /api/ledger_finalize  rules + verdict
-    Gemini       -> reads PDFs (cached forever)
+    screener.in  -> quarterly and annual numbers,           app.py -> finn/web.py:
+                    transcript and annual-report links        GET  /api/company          any NSE ticker
+    BSE / NSE    -> filings                                   POST /api/ledger_step      reads one call
+    Yahoo        -> end-of-day price and volume               POST /api/business         reads the annual report
+    Gemini       -> reads PDFs (cached forever)               POST /api/ledger_finalize  rules + verdict + bull/bear
   writes public/data/*.json  --commit-->  redeploy
 ```
 
 | Step | How | Why |
 |---|---|---|
 | Classify filings | Rules on exchange labels and headlines; one batched model call for leftovers | Most filings need no model at all |
-| Read transcripts, results, management-change filings | `gemini-3.5-flash-lite` (free tier, ~500/day) | Bulk extraction; the cheap model is enough |
-| Promise verdicts and credibility read | `gemini-3.8-flash` (free tier, ~20/day), falls back to Flash-Lite | The one step that needs judgment, once per company |
-| Arithmetic (QoQ, YoY, EBITDA, margins, promise checks) | Plain Python | Models extract numbers; code does the maths |
+| Read transcripts, results, management-change filings, annual reports | `gemini-3.5-flash-lite` (free tier, ~500/day) | Bulk extraction; the cheap model is enough |
+| Results lines the first read missed | A second Flash-Lite pass on the text of the statement pages only; then a check against the exchange's quarterly table | A misread card is worse than a late one |
+| Annual report | Code picks the ~14 pages about the business and segments; Flash-Lite reads only those | A 300-page PDF does not fit the free tier; the right 14 pages do |
+| Appointee background missing from the filing | Flash-Lite with Google Search grounding; shown only with sources, and labelled | Best effort; "UNKNOWN" is an allowed answer |
+| Promise verdicts, credibility read, bull and bear | `gemini-3.8-flash` (free tier, ~20/day), falls back to Flash-Lite | The one step that needs judgment, once per company |
+| Arithmetic (QoQ, YoY, EBITDA, margins, CAGR, debt/equity, cash conversion, promise checks) | Plain Python | Models extract numbers; code does the maths |
 | Status of each promise | Explicit rules in `finn/ledger.py` | Explainable; the model may override only with a stated reason |
 
 Every model output is cached by (task, document, prompt version) in `public/data/cache`,
@@ -135,7 +159,8 @@ pipeline and API run end to end offline. None of it is deployed.
 ## Layout
 
 ```
-finn/            library: sources, Gemini client, classifier, ledger, triage, maths
+finn/            library: sources, Gemini client, classifier, ledger, triage, maths,
+                 fundamentals (annual figures), business (annual-report snapshot)
 app.py           Vercel entry point (WSGI app: research API, static fallback)
 pipeline/        run.py (scheduled refresh), doctor.py (day-1 checks)
 public/          the app: index.html, css/, js/ (no framework, no build)

@@ -172,3 +172,53 @@ export function wireChart(root, id, labels, values, fmt) {
   });
   show(values.length - 1);
 }
+
+// ---- app-style building blocks ---------------------------------------------------------
+/** A company thumbnail: initials on a tint picked from the symbol, so it stays the same everywhere. */
+export function avatar(symbol, name, cls = "") {
+  const s = String(symbol || "?");
+  let h = 0;
+  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  const words = String(name || s).replace(/\b(Ltd|Limited|India|Industries|Company|Corporation|The)\b\.?/gi, "").trim().split(/\s+/).filter(Boolean);
+  const ini = (words.length > 1 ? words[0][0] + words[1][0] : s.slice(0, 2)).toUpperCase();
+  return raw(`<span class="av ${cls}" style="--h:${h}" aria-hidden="true">${esc(ini)}</span>`);
+}
+
+/** A status as a tag: its mark and its word, on a tint of its colour. */
+export function tag(status, text) {
+  const st = STATUS[status] || STATUS.pending;
+  return raw(`<span class="tag" style="--c:${st.color}">${mark(status).__raw}${esc(text || st.label)}</span>`);
+}
+
+/** A price move as a filled badge, like a rating badge. */
+export function moveBadge(chg) {
+  if (chg == null) return raw("");
+  const cls = chg > 0.05 ? "up" : chg < -0.05 ? "down" : "flat";
+  const arrow = cls === "up" ? "▲" : cls === "down" ? "▼" : "";
+  return raw(`<span class="badge ${cls}">${arrow} ${Math.abs(chg).toFixed(1)}%</span>`);
+}
+
+const ICONS = {
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  doc: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>',
+  book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>',
+  flag: '<path d="M6 21V4M6 4h11l-2 4 2 4H6"/>',
+  pulse: '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20h4"/>',
+  box: '<path d="M4 8h16v12H4zM3 4h18v4H3zM10 12h4"/>',
+  chev: '<path d="M6 9l6 6 6-6"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+  calendar: '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  spark: '<path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/>',
+  up: '<path d="M6 15l6-6 6 6"/>',
+  down: '<path d="M6 9l6 6 6-6"/>',
+  sliders: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/>',
+};
+export const icon = (name, cls = "") => raw(`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ""}</svg>`);
+
+/** FINN's mark: a ledger page with a tick, on the brand colour. */
+export const logo = () => raw(`<svg viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="10" fill="var(--brand)"/>
+  <path d="M10 9h11l3 3v13H10z" fill="none" stroke="var(--on-brand)" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M13.5 18l2.5 2.5 4.5-5" fill="none" stroke="var(--on-brand)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`);

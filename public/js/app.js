@@ -50,7 +50,7 @@ async function route() {
 window.addEventListener("hashchange", route);
 data.meta().then((m) => {
   ctx.snapshot = Boolean(m?.snapshot && m.generated_at);
-  if (ctx.snapshot) setNow(Date.parse(m.generated_at));
+  if (ctx.snapshot) setNow(Date.parse(m.as_of || m.generated_at));
 }).catch(() => {}).finally(route);
 
 // A tab left open stays current: refetch when it comes back after 10 minutes,

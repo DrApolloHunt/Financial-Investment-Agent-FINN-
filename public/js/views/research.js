@@ -1,5 +1,5 @@
 import * as data from "../data.js";
-import { html, mark, mount } from "../ui.js";
+import { avatar, html, icon, mark, mount } from "../ui.js";
 import { renderCompany } from "./company.js";
 
 export async function researchView(el, ctx, sym, alive) {
@@ -8,16 +8,18 @@ export async function researchView(el, ctx, sym, alive) {
   const picks = port.research || [];
 
   mount(el, html`
-    <header class="head">
-      <h1 class="title">Research any company</h1>
-      <p class="sub">FINN reads the last five earnings-call transcripts and the latest annual report, lists what management promised, checks each promise against reported numbers, and argues the bull and bear case from that evidence alone.</p>
+    <header class="pagehead">
+      <h1 class="title">Research</h1>
+      <p class="sub">Any NSE company. FINN reads its last five earnings calls and latest annual report, checks every promise against reported numbers, and argues the bull and bear case from that evidence alone.</p>
       <form class="ask" autocomplete="off">
+        ${icon("search")}
         <label class="sr" for="sym">NSE symbol</label>
         <input id="sym" name="sym" placeholder="NSE symbol, e.g. ASIANPAINT" value="${sym || ""}" spellcheck="false" autocapitalize="characters" inputmode="text">
         <button class="btn" type="submit">Build ledger</button>
       </form>
-      ${picks.length ? html`<div class="picks">${picks.map((p) => html`<button type="button" data-pick="${p}">${p}</button>`)}</div>` : ""}
     </header>
+    ${picks.length && !sym ? html`<h2 class="picks-h">Ready to open</h2>
+      <div class="picks">${picks.map((p) => html`<button type="button" data-pick="${p}">${avatar(p, p)}<b>${p}</b></button>`)}</div>` : ""}
     <div id="out"></div>`);
 
   const out = el.querySelector("#out");
@@ -34,14 +36,14 @@ export async function researchView(el, ctx, sym, alive) {
 
 async function build(out, ctx, sym, alive) {
   const cached = data.cachedResearch(sym);
-  if (cached) return renderCompany(out, cached, [], ctx, { banner: html`<p class="banner">Built on this device earlier this week.</p>` });
+  if (cached) return renderCompany(out, cached, [], ctx, { banner: html`<p class="banner">${icon("info")}<span>Built on this device earlier this week.</span></p>` });
 
   const lines = [];
   let name = sym;
   const paint = (extra = "") => {
     if (!alive()) return;
-    const rows = lines.map((l, i) => html`<div class="row ${i === lines.length - 1 ? "writing" : ""} ${l.live ? "live" : ""}"><div class="m">${mark(l.status)}</div><div class="b">${l.text}</div></div>`);
-    mount(out, html`<section class="section progress"><h2>${name}</h2><div class="ledger">${rows}</div>${extra}</section>`);
+    const rows = lines.map((l, i) => html`<div class="step-row ${i === lines.length - 1 ? "writing" : ""} ${l.live ? "live" : ""}">${mark(l.status)}<span>${l.text}</span></div>`);
+    mount(out, html`<section class="card steps"><h2>${name}</h2>${rows}${extra}</section>`);
   };
   const add = (status, text, live = false) => { lines.push({ status, text, live }); paint(); };
   const replaceLast = (status, text) => { lines.pop(); add(status, text); };

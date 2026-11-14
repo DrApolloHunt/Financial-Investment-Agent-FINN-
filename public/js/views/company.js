@@ -2,8 +2,8 @@ import * as data from "../data.js";
 import { LABELS } from "../categories.js";
 import { tier } from "../logic.js";
 import {
-  barChart, countsLine, crore, day, entry, html, lineChart, mark, mount, num, pct, rupees, sign, sparkline,
-  link, STATUS, STATUS_ORDER, strip, target, when, wireChart,
+  avatar, barChart, crore, day, html, icon, lineChart, mark, mount, moveBadge, num, rupees, sparkline,
+  link, STATUS, STATUS_ORDER, tag, target, when, wireChart,
 } from "../ui.js";
 
 export async function companyView(el, ctx, sym, alive) {
@@ -37,10 +37,10 @@ function history(p) {
 function promiseRow(p) {
   const t = target(p.target);
   const alarm = p.contradiction;
-  return html`<div class="row tap" data-p="${p.id}">
+  return html`<div class="prow" data-p="${p.id}">
     <div class="m">${mark(p.status)}</div>
     <div class="b" role="button" tabindex="0" aria-expanded="false">
-      <div class="p-stmt" style="font-family:var(--serif);font-weight:500">${p.statement}</div>
+      <div class="p-stmt">${p.statement}</div>
       <div class="p-meta">${STATUS[p.status]?.label}${t ? `, target ${t}` : ""}${p.horizon ? `, by ${p.horizon}` : ""}${p.revised === "worse" ? ", target cut" : p.revised === "better" ? ", target raised" : ""}</div>
       <div class="p-why ${alarm ? "alarm" : ""}">${p.reason}</div>
       <div class="p-more">
@@ -49,7 +49,7 @@ function promiseRow(p) {
         ${p.actual ? html`<p class="actual">Delivered: <b>${num(p.actual.value)}${p.actual.unit === "%" ? "%" : p.actual.unit ? ` ${p.actual.unit}` : ""}</b> for ${p.actual.period}. <span class="foot">Source: ${p.actual.source}.</span></p>` : ""}
         ${p.verdict && !p.verdict.startsWith(p.statement) && p.verdict !== p.reason ? html`<p class="actual">${p.verdict}</p>` : ""}
       </div>
-    </div></div>`;
+    </div>${icon("chev", "chev")}</div>`;
 }
 
 export function renderCompany(el, co, filings, ctx, { back, banner } = {}) {
@@ -75,38 +75,43 @@ export function renderCompany(el, co, filings, ctx, { back, banner } = {}) {
     F?.balance?.period ? ["balance", "Balance sheet"] : null, F?.cash?.years ? ["cash", "Cash quality"] : null].filter(Boolean);
 
   mount(el, html`
-    ${back ? html`<a class="back" href="${back}">Back</a>` : ""}
+    ${back ? html`<div class="bar"><a class="iconbtn" href="${back}" aria-label="Back to ledgers">${icon("back")}</a><span class="crumb">Ledgers</span></div>` : ""}
     ${banner || ""}
-    <div class="cohead">
-      <div><h1 class="title">${co.name}</h1><div class="meta">${co.symbol}${co.sector ? `, ${co.sector}` : ""}${co.basis ? `, ${co.basis} figures` : ""}</div></div>
-      <div class="price">${last ? html`<b>${rupees(last.c)}</b><br><span class="${sign(chg)}">${pct(chg)}</span>` : ""}</div>
-    </div>
-    ${px.length > 2 ? html`${sparkline(px.map((p) => p.c))}<p class="foot">Closing prices, six months to ${day(last.d)}</p>` : ""}
+    <section class="card cohero">
+      <div class="cohead">${avatar(co.symbol, co.name, "lg")}
+        <div><h1 class="title">${co.name}</h1><div class="meta">${co.symbol}${co.sector ? `, ${co.sector}` : ""}${co.basis ? `, ${co.basis} figures` : ""}</div></div>
+      </div>
+      ${last ? html`<div class="quote-row"><b>${rupees(last.c)}</b>${moveBadge(chg)}</div>` : ""}
+      ${px.length > 2 ? html`${sparkline(px.map((p) => p.c))}<p class="foot">Closing prices, six months to ${day(last.d)}</p>` : ""}
+    </section>
 
-    ${jumps.length > 2 ? html`<nav class="jump" aria-label="On this page">${jumps.map(([id, label]) => html`<button type="button" data-jump="${id}">${label}</button>`)}</nav>` : ""}
+    ${L.credibility ? html`<section class="read-card"><span class="by">${icon("spark")}FINN's read of ${L.calls?.length || "the last"} earnings calls against reported numbers</span><p>${L.credibility}</p></section>` : ""}
 
-    ${L.credibility ? html`<p class="cred">${L.credibility}<span class="by">FINN's read of ${L.calls?.length || "the last"} earnings calls against reported numbers.</span></p>` : ""}
+    ${jumps.length > 2 ? html`<div class="jump-wrap"><nav class="chips" aria-label="On this page">${jumps.map(([id, label]) => html`<button type="button" data-jump="${id}">${label}</button>`)}</nav></div>` : ""}
 
-    <section class="section" id="sec-promises">
+    <section class="card sec-card" id="sec-promises">
       <h2>Promises <span class="n">${L.promises.length}</span></h2>
-      ${L.promises.length ? html`<p class="lede" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${strip(L.promises)}<span>${countsLine(L.counts)}</span></p>` : ""}
-      ${L.promises.length ? html`<div class="ledger">${groups.map(([st, ps]) => html`
-          <div class="group-h">${mark(st)}${STATUS[st].label} (${ps.length})</div>
-          ${ps.map(promiseRow)}`)}</div>`
+      ${L.promises.length ? html`<div class="tag-row">${STATUS_ORDER.filter((st) => L.counts?.[st]).map((st) => tag(st, `${L.counts[st]} ${STATUS[st].label.toLowerCase()}`))}</div>` : ""}
+      ${L.promises.length ? html`<div class="plist">${groups.map(([st, ps]) => html`
+          <div class="group-h">${tag(st, `${STATUS[st].label} (${ps.length})`)}</div>
+          ${ps.map(promiseRow)}`)}</div>
+          <p class="foot">Tap a promise for the quote, the call-by-call history and the filing that settled it.</p>`
         : html`<p class="note">${co.transcripts?.length ? "No forward-looking commitments were found in the calls read." : "No earnings-call transcripts are available for this company, so there is nothing to hold management to yet."}</p>`}
     </section>
 
-    ${bull.length || bear.length ? html`<section class="section" id="sec-bullbear"><h2>Bull vs bear</h2>
+    ${bull.length || bear.length ? html`<section class="card sec-card" id="sec-bullbear"><h2>Bull vs bear</h2>
       <div class="bb">
-        <div><h3>Bull case</h3><ul>${bull.map((b) => html`<li>${b}</li>`)}</ul></div>
-        <div><h3>Bear case</h3><ul>${bear.map((b) => html`<li>${b}</li>`)}</ul></div>
+        <div class="bull"><h3>${icon("up")}Bull case</h3><ul>${bull.map((b) => html`<li>${b}</li>`)}</ul></div>
+        <div class="bear"><h3>${icon("down")}Bear case</h3><ul>${bear.map((b) => html`<li>${b}</li>`)}</ul></div>
       </div>
       <p class="foot">Argued only from this page: the promise ledger, the reported numbers and the annual report.</p>
     </section>` : ""}
 
-    ${B ? html`<section class="section" id="sec-business"><h2>Business</h2>
+    ${B ? html`<section class="card sec-card" id="sec-business"><h2>Business</h2>
       <p class="said-block">${B.what_it_does}</p>
-      ${B.segments?.length ? html`<div class="mix">${B.segments.map((g) => html`<div class="mix-row">
+      ${B.segments?.length && !B.segments.some((g) => g.share_pct != null) ? html`<p class="foot">Segments</p>
+        <div class="tag-row">${B.segments.map((g) => html`<span class="tag">${g.name}</span>`)}</div>` : ""}
+      ${B.segments?.some((g) => g.share_pct != null) ? html`<div class="mix">${B.segments.filter((g) => g.share_pct != null).map((g) => html`<div class="mix-row">
         <span class="mix-name">${g.name}</span>
         <span class="mix-bar"><span style="width:${Math.max(2, Math.min(100, g.share_pct || 0))}%"></span></span>
         <span class="mix-val">${g.share_pct != null ? `${(+g.share_pct).toFixed(0)}%` : "—"}</span></div>`)}</div>
@@ -115,7 +120,7 @@ export function renderCompany(el, co, filings, ctx, { back, banner } = {}) {
       <p class="foot">From the ${B.year || "latest"} annual report${B.url ? html`, <a href="${link(B.url)}" target="_blank" rel="noopener">open it</a>` : ""}.</p>
     </section>` : ""}
 
-    ${F || rev.length ? html`<section class="section" id="sec-numbers"><h2>Numbers</h2>
+    ${F || rev.length ? html`<section class="card sec-card" id="sec-numbers"><h2>Numbers</h2>
       ${F ? html`<dl class="stats">
         ${stat(`Revenue, ${F.snapshot.period || "latest"}`, F.snapshot.revenue != null ? crore(F.snapshot.revenue) : null)}
         ${stat(`Net profit, ${F.snapshot.period || "latest"}`, F.snapshot.pat != null ? crore(F.snapshot.pat) : null)}
@@ -143,7 +148,7 @@ export function renderCompany(el, co, filings, ctx, { back, banner } = {}) {
       <p class="foot">Tap a bar or point to read its value. ${F ? F.source : "Exchange-reported quarterly figures."}</p>
     </section>` : ""}
 
-    ${F?.balance?.period ? html`<section class="section" id="sec-balance"><h2>Balance sheet <span class="n">${F.balance.period}</span></h2>
+    ${F?.balance?.period ? html`<section class="card sec-card" id="sec-balance"><h2>Balance sheet <span class="n">${F.balance.period}</span></h2>
       <dl class="stats">
         ${stat(F.balance.lender ? "Borrowings and deposits" : "Borrowings", F.balance.borrowings != null ? crore(F.balance.borrowings) : null)}
         ${stat("Net worth", F.balance.net_worth != null ? crore(F.balance.net_worth) : null)}
@@ -154,7 +159,10 @@ export function renderCompany(el, co, filings, ctx, { back, banner } = {}) {
       ${F.balance.notes?.length ? html`<ul class="facts">${F.balance.notes.map((n) => html`<li>${n}</li>`)}</ul>` : ""}
     </section>` : ""}
 
-    ${F?.cash?.years ? html`<section class="section" id="sec-cash"><h2>Cash quality</h2>
+    ${F?.cash?.years && F.cash.lender ? html`<section class="card sec-card" id="sec-cash"><h2>Cash quality</h2>
+      ${F.cash.notes?.length ? html`<p class="note">${F.cash.notes[0]}</p>` : ""}
+    </section>` : ""}
+    ${F?.cash?.years && !F.cash.lender ? html`<section class="card sec-card" id="sec-cash"><h2>Cash quality</h2>
       <table class="res"><thead><tr><th scope="col">Year</th><th scope="col">Operating cash</th><th scope="col">Net profit</th><th scope="col">Cash / profit</th></tr></thead>
         <tbody>${F.cash.years.map((y, i) => {
           const c = F.cash.cfo[i], p = F.cash.pat[i];
@@ -165,14 +173,14 @@ export function renderCompany(el, co, filings, ctx, { back, banner } = {}) {
       ${F.cash.notes?.length ? html`<ul class="facts">${F.cash.notes.map((n) => html`<li>${n}</li>`)}</ul>` : ""}
     </section>` : ""}
 
-    ${recent.length ? html`<section class="section"><h2>Recent filings that matter</h2>
-      <div class="ledger">${recent.map((it) => html`<div class="row"><div class="m">${entry(LABELS[it.category] || "Filing")}</div><div class="b">
-        <div class="who"><b>${LABELS[it.category] || it.category}</b><span class="t">${when(it.ts)}</span></div>
-        <p class="what">${it.summary || it.headline}</p>
-        ${it.attachment ? html`<div class="links"><a href="${link(it.attachment)}" target="_blank" rel="noopener">Open filing</a></div>` : ""}</div></div>`)}</div>
+    ${recent.length ? html`<section class="card sec-card"><h2>Recent filings that matter</h2>
+      ${recent.map((it) => html`<div class="mini">
+        <div class="k"><span>${LABELS[it.category] || it.category}</span><span>${when(it.ts)}</span></div>
+        <p>${it.summary || it.headline}</p>
+        ${it.attachment ? html`<a href="${link(it.attachment)}" target="_blank" rel="noopener">Open filing</a>` : ""}</div>`)}
     </section>` : ""}
 
-    <section class="section"><h2>Sources</h2>
+    <section class="card sec-card"><h2>Sources</h2>
       <p class="src">Promises come only from the company's own earnings-call transcripts${L.calls?.length ? ":" : "."}
         ${(L.calls || []).map((c, i) => html`${i ? ", " : " "}<a href="${link(c.url)}" target="_blank" rel="noopener">${c.quarter}</a>`)}.
         Delivered numbers and the ten-year figures come from the company's filings${co.url ? html` via <a href="${link(co.url)}" target="_blank" rel="noopener">screener.in</a>` : ""}.
@@ -180,7 +188,7 @@ export function renderCompany(el, co, filings, ctx, { back, banner } = {}) {
     </section>
   `);
 
-  el.querySelectorAll(".row.tap > .b").forEach((b) => {
+  el.querySelectorAll(".prow > .b").forEach((b) => {
     const toggle = () => {
       const row = b.parentElement, open = !row.classList.contains("open");
       row.classList.toggle("open", open);
