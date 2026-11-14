@@ -1,9 +1,9 @@
 import * as data from "../data.js";
 import { LABELS } from "../categories.js";
-import { buriedKinds, explaining, group, tier, unusual, windowStart } from "../logic.js";
+import { buriedKinds, explaining, group, istDate, tier, unusual, windowRange } from "../logic.js";
 import { ago, entry, html, mark, mount, nowMs, num, pct, raw, sign, stampOf, target, today, when, link } from "../ui.js";
 
-const WINDOWS = [["24h", "24 hours"], ["3d", "3 days"], ["7d", "7 days"], ["since", "Since I last looked"]];
+const WINDOWS = [["24h", "24 hours"], ["3d", "3 days"], ["7d", "7 days"], ["since", "Since last visit"], ["custom", "Dates"]];
 
 export async function todayView(el, ctx, _a, alive) {
   const [meta, port, feed] = await Promise.all([
@@ -15,18 +15,20 @@ export async function todayView(el, ctx, _a, alive) {
   }
   const s = ctx.settings;
   const now = nowMs();
-  const start = windowStart(s.window, now, ctx.session);
+  const { start, end, from, to } = windowRange(s.window, now, ctx.session, s.range || {});
   const names = Object.fromEntries(port.companies.map((c) => [c.symbol, c.name]));
 
   const all = feed.items.map((it) => ({ ...it, tier: tier(it, s.care) }));
-  const inWin = all.filter((it) => it.ts && new Date(it.ts) >= start);
+  const inWin = all.filter((it) => it.ts && new Date(it.ts) >= start && new Date(it.ts) <= end);
+  const earliest = all.reduce((m, it) => (it.ts && it.ts < m ? it.ts : m), new Date(now).toISOString());
   const grouped = group(inWin);
 
   // price moves, judged by the investor's own thresholds, paired with filings
   const unexplained = [], movedWith = [];
   for (const c of port.companies) {
     for (const m of unusual(c.recent || [], { movePct: s.movePct, volX: s.volX })) {
-      if (new Date(`${m.d}T15:30:00+05:30`) < start) continue;
+      const close = new Date(`${m.d}T15:30:00+05:30`);
+      if (close < start || close > end) continue;
       const why = explaining(m, all.filter((f) => f.symbol === c.symbol));
       const host = why.map((f) => grouped.find((g) => g.id === f.id)).find(Boolean);
       if (host) host.move = m;
@@ -50,6 +52,10 @@ export async function todayView(el, ctx, _a, alive) {
       <div class="seg" role="group" aria-label="Time window">
         ${WINDOWS.map(([k, label]) => html`<button type="button" data-win="${k}" aria-pressed="${s.window === k}">${label}</button>`)}
       </div>
+      ${s.window === "custom" ? html`<div class="range">
+        <label>From <input type="date" data-range="from" value="${from}" min="${istDate(Date.parse(earliest))}" max="${istDate(now)}"></label>
+        <label>to <input type="date" data-range="to" value="${to}" min="${istDate(Date.parse(earliest))}" max="${istDate(now)}"></label>
+        <span class="foot">Filings collected from ${when(earliest)}.</span></div>` : ""}
       <p class="sub">${s.window === "since" && !ctx.session.start ? "First visit: showing the last 24 hours. " : ""}${meta?.generated_at && !ctx.snapshot ? `Data updated ${ago(meta.generated_at)}.` : ""}</p>
       ${ctx.snapshot ? html`<p class="banner">Demo snapshot taken ${stampOf(meta.generated_at)}. Filings and prices are frozen at that moment, so "the last 24 hours" means the 24 hours before it. The Research tab works live on any company.</p>` : ""}
       ${data.FIXTURES ? html`<p class="banner">Sample data: these companies, filings and quotes are fictional.</p>` : ""}
@@ -81,7 +87,7 @@ export async function todayView(el, ctx, _a, alive) {
       <h2>Worth knowing <span class="n">${material.length}</span></h2>
       <div class="ledger">${material.map((it) => materialRow(it))}</div></section>` : ""}
 
-    ${n === 0 && !buried.length ? html`<div class="empty"><b>No filings in this window.</b>Try a longer window above.</div>` : ""}
+    ${n === 0 && !buried.length ? html`<div class="empty"><b>No filings in this window.</b>${s.window === "custom" ? "Try other dates above." : "Try a longer window above."}</div>` : ""}
 
     ${buried.length ? html`<section class="buried">
       <button type="button" aria-expanded="false" data-bury>
@@ -96,6 +102,12 @@ export async function todayView(el, ctx, _a, alive) {
 
   el.querySelectorAll("[data-win]").forEach((b) => b.addEventListener("click", () => {
     s.window = b.dataset.win; ctx.save(); todayView(el, ctx, _a, alive);
+  }));
+  el.querySelectorAll("[data-range]").forEach((inp) => inp.addEventListener("change", () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(inp.value)) return;
+    s.range = { from, to, ...(s.range || {}), [inp.dataset.range]: inp.value };
+    ctx.save(); todayView(el, ctx, _a, alive);
+    el.querySelector(`[data-range="${inp.dataset.range}"]`)?.focus();
   }));
   const bury = el.querySelector("[data-bury]");
   bury?.addEventListener("click", () => {
@@ -171,10 +183,14 @@ function resultsCard(c) {
     ${c.note ? html`<p class="foot">${c.note}</p>` : ""}`;
 }
 
+/** Top management before the board; within each, arrivals before exits. */
+const rank = (c) => (c.level === "top" ? 0 : 2) + (c.action === "appointed" ? 0 : 1);
+
 function personLine(p) {
   const verb = { appointed: "In", resigned: "Out", retired: "Retiring", redesignated: "New role", ceased: "Out" }[p.action] || "Change";
   return html`<div class="person"><span class="n">${verb}: ${p.name}</span>, ${p.role}${p.effective ? html`<span class="foot"> from ${p.effective}</span>` : ""}
-    ${p.background ? html`<p class="bio">${p.background}</p>` : ""}
+    ${p.background ? html`<p class="bio">${p.background}</p>`
+      : p.web_background ? html`<p class="bio web">${p.web_background.text}<span class="foot"> The filing gave no profile; this is from a web search${(p.web_background.sources || []).map((s, i) => html`${i ? "," : ":"} <a href="${link(s.url)}" target="_blank" rel="noopener">${s.title}</a>`)}. Check it before relying on it.</span></p>` : ""}
     ${p.reason ? html`<p class="bio">Stated reason: ${p.reason}</p>` : ""}</div>`;
 }
 
@@ -183,7 +199,7 @@ function materialRow(it) {
     const changes = [...it.card.changes, ...((it.twins || []).flatMap((t) => t.card.changes))];
     const seen = new Set();
     const uniq = changes.filter((c) => { const k = c.name + c.action; if (seen.has(k)) return false; seen.add(k); return true; })
-      .sort((a, b) => (a.action === "appointed" ? -1 : 1));
+      .sort((a, b) => rank(a) - rank(b));
     const role = uniq.find((c) => c.level === "top")?.role || "Management";
     const short = role.replace(/Chief Financial Officer/i, "CFO").replace(/Chief Executive Officer/i, "CEO").replace(/Managing Director/i, "MD");
     return html`<div class="row"><div class="m">${entry("Management change")}</div><div class="b">

@@ -26,7 +26,7 @@ from .financials import actual_for, scope_of
 from .periods import qkey
 
 V_PROMISES = "l4"
-V_VERDICT = "v3"
+V_VERDICT = "v4"
 
 N = {"type": "NUMBER", "nullable": True}
 METRICS = ["revenue_growth", "ebitda_margin", "pat_growth", "volume_growth", "order_inflow",
@@ -311,19 +311,27 @@ VERDICT_SCHEMA = {
                            "status": {"type": "STRING", "enum": STATUSES},
                            "reason": {"type": "STRING"}},
             "required": ["id", "status", "reason"]}},
+        "bull": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "3 points, each ≤22 words, each citing a number or promise from the inputs"},
+        "bear": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "3 points, each ≤22 words, each citing a number or promise from the inputs"},
     },
-    "required": ["credibility", "lines", "overrides"],
+    "required": ["credibility", "lines", "overrides", "bull", "bear"],
 }
 
-VERDICT_PROMPT = """You are an analyst judging management's promise-keeping for {name}, using ONLY the ledger below
-(built from their own earnings calls and exchange-reported numbers). No outside knowledge.
+VERDICT_PROMPT = """You are an analyst judging {name}, using ONLY the material below: a ledger of management's promises
+(from their own earnings calls, checked against exchange-reported numbers), ten-year figures from the company's
+filings, and a snapshot from its latest annual report. No outside knowledge, no news, no price targets.
 
-For each promise write one plain line (≤16 words) on promised vs delivered, with numbers where present.
-Only override a status if the evidence in the ledger clearly contradicts it; give the reason.
-Then a credibility read (≤45 words): do they hit what they guide, revise quietly, or drop topics?
+1) For each promise write one plain line (≤16 words) on promised vs delivered, with numbers where present.
+   Only override a status if the evidence in the ledger clearly contradicts it; give the reason.
+2) credibility (≤45 words): do they hit what they guide, revise quietly, or drop topics?
+3) bull and bear: a tight case each way, 3 points each (≤22 words per point). Every point must rest on a specific
+   number, trend or promise from the material. Weigh both sides honestly; do not recommend buying or selling.
 
 Ledger:
-{ledger}"""
+{ledger}
+
+Figures and annual report:
+{context}"""
 
 
 def _fmt_target(t: dict) -> str:
@@ -347,21 +355,36 @@ def _template_line(p: dict) -> str:
     return p["reason"]
 
 
-def finalize(state: dict, quarters: dict, latest: Optional[str], use_model: bool = True) -> dict:
+def context_for(co: dict) -> str:
+    """Facts for the bull/bear case: computed figures and the annual-report snapshot."""
+    from .fundamentals import facts_for_prompt
+    lines = [facts_for_prompt(co.get("fundamentals"))]
+    b = co.get("business") or {}
+    if b.get("what_it_does"):
+        lines.append(f"Business ({b.get('year') or 'latest'} annual report): {b['what_it_does']}")
+        segs = [f"{g['name']} {g['share_pct']:g}%" if g.get("share_pct") is not None else g["name"] for g in b.get("segments") or []]
+        if segs:
+            lines.append("Revenue mix: " + ", ".join(segs))
+        lines += b.get("other_facts") or []
+    return "\n".join(l for l in lines if l)
+
+
+def finalize(state: dict, quarters: dict, latest: Optional[str], use_model: bool = True,
+             context: str = "") -> dict:
     promises = [assess(p, quarters, latest) for p in state["promises"]]
-    credibility, model = None, None
-    if use_model and promises:
+    credibility, model, bull, bear = None, None, [], []
+    if use_model and (promises or context):
         compact = [{"id": p["id"], "said": p["statement"], "made_in": p["made_in"], "target": p["target"],
                     "horizon": p["horizon"], "history": [f"{e['quarter']}:{e['kind']}" + (f"({e.get('reported')})" if e.get("reported") is not None else "") for e in p["history"]],
                     "actual": p["actual"] and {k: p["actual"][k] for k in ("value", "unit", "period", "source")},
                     "status": p["status"]} for p in promises]
         blob = json.dumps(compact, ensure_ascii=False)
-        key = cache.key_for("verdict", hashlib.sha1(blob.encode()).hexdigest(), V_VERDICT)
+        key = cache.key_for("verdict", hashlib.sha1((blob + context).encode()).hexdigest(), V_VERDICT)
         hit = cache.get(key)
         if hit is None:
             try:
-                data, model = gemini.generate_json("verdict", [{"text": VERDICT_PROMPT.format(name=state["name"], ledger=blob)}],
-                                                   VERDICT_SCHEMA, temperature=0.2)
+                prompt = VERDICT_PROMPT.format(name=state["name"], ledger=blob or "[]", context=context or "(none)")
+                data, model = gemini.generate_json("verdict", [{"text": prompt}], VERDICT_SCHEMA, temperature=0.2)
                 hit = {"data": data, "model": model}
                 cache.put(key, hit)
             except gemini.GeminiError:
@@ -377,11 +400,13 @@ def finalize(state: dict, quarters: dict, latest: Optional[str], use_model: bool
                     p["status_rule"] = p["status"]
                     p["status"] = over[p["id"]]["status"]
                     p["reason"] = over[p["id"]]["reason"][:200]
-            credibility = (data.get("credibility") or "")[:400]
+            credibility = (data.get("credibility") or "")[:400] if promises else None
+            bull = [b.strip()[:220] for b in (data.get("bull") or []) if b and b.strip()][:3]
+            bear = [b.strip()[:220] for b in (data.get("bear") or []) if b and b.strip()][:3]
     for p in promises:
         p.setdefault("verdict", _template_line(p))
     order = {s: i for i, s in enumerate(["missed", "slipping", "dropped", "on_track", "pending", "kept"])}
     promises.sort(key=lambda p: (order.get(p["status"], 9), -qkey(p["made_in"])[0], -qkey(p["made_in"])[1]))
     counts = {s: sum(1 for p in promises if p["status"] == s) for s in STATUSES}
     return {**state, "promises": promises, "counts": counts, "credibility": credibility,
-            "verdict_model": model, "latest_quarter": latest}
+            "bull": bull, "bear": bear, "verdict_model": model, "latest_quarter": latest}

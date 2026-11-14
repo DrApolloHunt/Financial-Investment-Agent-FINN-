@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { tier, unusual, explaining, group, windowStart, buriedKinds } from "../../public/js/logic.js";
+import { tier, unusual, explaining, group, windowStart, windowRange, buriedKinds } from "../../public/js/logic.js";
 
 const care = { results: true, press_release: true, management_change: true, unclassified: false };
 
@@ -59,4 +59,17 @@ test("buried summary", () => {
     { category: "investor_meetings" }, { category: "investor_meetings" }],
     { unclassified: "Routine paperwork", agm_egm: "AGM / EGM", investor_meetings: "Investor meeting" });
   assert.deepEqual(k, ["2 routine paperwork", "2 investor meetings", "1 AGM / EGM"]);
+});
+
+test("custom range covers whole India-time days and never runs past now", () => {
+  const now = Date.parse("2026-11-10T12:00:00Z"); // 17:30 IST on 10 Nov
+  const r = windowRange("custom", now, {}, { from: "2026-11-03", to: "2026-11-05" });
+  assert.equal(r.start.toISOString(), "2026-11-02T18:30:00.000Z");
+  assert.equal(r.end.toISOString(), "2026-11-05T18:29:59.999Z");
+  const swapped = windowRange("custom", now, {}, { from: "2026-11-10", to: "2026-11-08" });
+  assert.equal(swapped.from, "2026-11-08");
+  assert.equal(swapped.end.getTime(), now);
+  const dflt = windowRange("custom", now, {}, {});
+  assert.equal(dflt.from, "2026-11-04");
+  assert.equal(windowRange("3d", now).end.getTime(), now);
 });

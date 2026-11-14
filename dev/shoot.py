@@ -7,6 +7,7 @@ OUT = "dev/shots"
 shots = [
     ("today", "/?fixtures#/", None),
     ("today-buried", "/?fixtures#/", "[data-win='7d']|[data-bury]"),
+    ("today-dates", "/?fixtures#/", "[data-win='custom']"),
     ("ledgers", "/?fixtures#/ledgers", None),
     ("company", "/?fixtures#/c/NWCABLE", ".row.tap > .b"),
     ("research", "/?fixtures#/research/LOTUSPNT", None),
@@ -21,14 +22,14 @@ with sync_playwright() as p:
         errs = []
         page.on("console", lambda m: errs.append(f"{m.type}: {m.text}") if m.type in ("error", "warning") else None)
         page.on("pageerror", lambda e: errs.append(f"pageerror: {e}"))
-        for name, path, click in shots if scheme == "light" else shots[:1] + shots[3:4]:
+        for name, path, click in shots if scheme == "light" else shots[:1] + shots[4:5]:
             page.goto(BASE + path)
             page.wait_for_timeout(2500 if "live" in name else 700)
             for sel in (click.split("|") if click else []):
                 page.click(sel)
                 page.wait_for_timeout(300)
             page.screenshot(path=f"{OUT}/{name}-{scheme}.png", full_page=True)
-            if name == "today-buried":
+            if name in ("today-buried", "today-dates"):
                 page.click("[data-win='24h']")
         print(scheme, "errors:", errs or "none")
         ctx.close()

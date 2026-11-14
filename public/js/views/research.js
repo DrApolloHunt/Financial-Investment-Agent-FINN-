@@ -10,7 +10,7 @@ export async function researchView(el, ctx, sym, alive) {
   mount(el, html`
     <header class="head">
       <h1 class="title">Research any company</h1>
-      <p class="sub">FINN reads the last five earnings-call transcripts, lists what management promised, and checks each promise against reported numbers.</p>
+      <p class="sub">FINN reads the last five earnings-call transcripts and the latest annual report, lists what management promised, checks each promise against reported numbers, and argues the bull and bear case from that evidence alone.</p>
       <form class="ask" autocomplete="off">
         <label class="sr" for="sym">NSE symbol</label>
         <input id="sym" name="sym" placeholder="NSE symbol, e.g. ASIANPAINT" value="${sym || ""}" spellcheck="false" autocapitalize="characters" inputmode="text">
@@ -58,8 +58,14 @@ async function build(out, ctx, sym, alive) {
         replaceLast("kept", `${ev.t.quarter}: ${ev.found} new ${ev.found === 1 ? "promise" : "promises"}${ev.updated ? `, ${ev.updated} earlier ${ev.updated === 1 ? "one" : "ones"} updated` : ""}.`);
       } else if (ev.type === "readfail") {
         replaceLast("missed", `${ev.t.quarter}: could not be read. ${ev.error}`);
+      } else if (ev.type === "business") {
+        add("pending", "Reading the latest annual report…", true);
+      } else if (ev.type === "businessread") {
+        replaceLast("kept", `Annual report ${ev.business.year || ""}: ${ev.business.segments?.length || 0} segments found.`);
+      } else if (ev.type === "businessfail") {
+        replaceLast("missed", `The annual report could not be read. ${ev.error}`);
       } else if (ev.type === "judging") {
-        add("pending", "Checking each promise against reported numbers…", true);
+        add("pending", "Checking each promise against reported numbers and weighing the bull and bear cases…", true);
       } else if (ev.type === "nocalls") {
         replaceLast("dropped", "No earnings-call transcripts are listed for this company.");
       }

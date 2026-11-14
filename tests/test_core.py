@@ -328,3 +328,84 @@ def test_results_card_completed_or_rebuilt_from_table(company):
     rebuilt = financials.complete_from_table(bad, q)
     assert rebuilt["source"] == "table" and rebuilt["rows"][0]["value"] == 1280
     assert rebuilt["rows"][0]["yoy"]["pct"] == pytest.approx((1280 / 1150 - 1) * 100, abs=0.1)
+
+
+# ---- annual fundamentals -------------------------------------------------------------
+
+def test_screener_annual_tables_and_top_ratios(company):
+    pl, bs = company["annual"]["pl"], company["annual"]["bs"]
+    assert pl["periods"][0] == "FY20" and pl["periods"][-1] == "TTM"
+    assert pl["rows"]["revenue"][-2] == 4730 and pl["rows"]["pat"][-1] == 430
+    assert bs["periods"][-1] == "Sep 2026" and bs["rows"]["borrowings"][-1] == 750
+    assert company["annual"]["cf"]["rows"]["cfo"][2] == -20
+    assert company["annual"]["ratios"]["rows"]["wc_days"][-1] == 80
+    t = company["top_ratios"]
+    assert t["market_cap_cr"] == 12345 and t["pe"] == 28.4 and t["roe"] == 17.2 and t["high"] == 1500
+
+
+def test_fundamentals_summary(company):
+    from finn import fundamentals
+    f = fundamentals.summarize(company)
+    tr = f["trajectory"]
+    assert tr["years"][-1] == "FY26" and tr["rev_cagr_5y"] == pytest.approx(((4730 / 2300) ** 0.2 - 1) * 100, abs=0.1)
+    assert any("compounded" in n for n in tr["notes"])
+    b = f["balance"]
+    assert b["period"] == "Sep 2026" and b["debt_to_equity"] == round(750 / 2200, 2)
+    assert any("Working-capital days stretched" in n for n in b["notes"])
+    c = f["cash"]
+    assert c["conversion"] == round((170 + 200 - 20 + 300 + 380) / (190 + 230 + 280 + 330 + 416) * 100)
+    assert any("negative in FY24" in n for n in c["notes"])
+    assert f["snapshot"]["period"] == "TTM" and f["snapshot"]["pe"] == 28.4
+    assert "compounded" in fundamentals.facts_for_prompt(f)
+
+
+def test_fundamentals_lender_and_missing():
+    from finn import fundamentals
+    assert fundamentals.summarize({"annual": {}}) is None
+    co = {"is_lender": True, "annual": {"pl": {"periods": ["FY25", "FY26"], "rows": {"revenue": [100, 120], "pat": [20, 25]}},
+                                         "bs": {"periods": ["FY26"], "rows": {"borrowings": [900], "reserves": [100], "equity_capital": [10]}}}}
+    f = fundamentals.summarize(co)
+    assert f["balance"]["debt_to_equity"] is None and "raw material" in f["balance"]["notes"][0]
+
+
+def test_results_second_pass_fills_only_missing_lines(monkeypatch):
+    from finn import gemini, readers
+    first = {"is_results_document": True, "basis": "consolidated", "unit": "crore", "periods": [
+        {"role": "current", "revenue_from_operations": 1000, "total_expenses": 800, "finance_costs": None,
+         "depreciation": None, "pbt": 210, "pat": 160},
+        {"role": "previous", "revenue_from_operations": 950, "finance_costs": None, "depreciation": None}]}
+    assert readers._missing(first) == ["finance_costs", "depreciation"]
+    seen = {}
+
+    def fake(task, parts, schema=None, **kw):
+        seen["prompt"] = parts[0]["text"]
+        return {"periods": [{"role": "current", "finance_costs": 12, "depreciation": 30, "pat": 999},
+                            {"role": "previous", "finance_costs": 11, "depreciation": 29}]}, "m"
+    monkeypatch.setattr(gemini, "generate_json", fake)
+    monkeypatch.setattr(readers, "_results_text", lambda b: "Finance costs 12 11 Depreciation 30 29")
+    out = readers._fill_missing(first, b"%PDF")
+    cur = out["periods"][0]
+    assert (cur["finance_costs"], cur["depreciation"], cur["pat"]) == (12, 30, 160)   # read lines untouched
+    assert "finance_costs, depreciation" in seen["prompt"]
+    lender = {"is_lender": True, "periods": [{"role": "current", "revenue_from_operations": 5, "pbt": 2, "pat": 1}]}
+    assert readers._missing(lender) == []          # lenders have no EBITDA lines to chase
+
+
+def test_web_bio_rejects_unsure_or_unsourced_answers(monkeypatch, tmp_path):
+    from finn import gemini, readers
+    monkeypatch.setenv("FINN_CACHE_DIR", str(tmp_path))
+    answers = iter([("UNKNOWN", "m", [{"title": "x", "url": "https://x"}]),
+                    ("Twenty years at a bank [1].", "m", []),
+                    ("Spent 20 years at a large private bank, latterly as its treasurer; chartered accountant [1, 2].", "m",
+                     [{"title": "a.in", "url": "https://a.in/p"}])])
+    monkeypatch.setattr(gemini, "search_text", lambda task, prompt, **kw: next(answers))
+    assert readers.web_bio("A One", "CFO", "Co") is None
+    assert readers.web_bio("B Two", "CFO", "Co") is None           # no sources: not shown
+    got = readers.web_bio("C Three", "CFO", "Co")
+    assert got["text"].endswith("chartered accountant.") and "[" not in got["text"]
+    assert readers.web_bio("C Three", "CFO", "Co") == got           # cached
+
+    def boom(*a, **k):
+        raise gemini.GeminiError("grounding not available on this tier")
+    monkeypatch.setattr(gemini, "search_text", boom)
+    assert readers.web_bio("D Four", "CFO", "Co") is None

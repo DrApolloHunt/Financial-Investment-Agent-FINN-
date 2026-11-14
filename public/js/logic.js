@@ -30,6 +30,24 @@ export function windowStart(mode, now, session) {
   return new Date(now - 24 * 3600e3);
 }
 
+const IST = 5.5 * 3600e3;
+/** Calendar date (YYYY-MM-DD) in India for a timestamp. */
+export const istDate = (ms) => new Date(ms + IST).toISOString().slice(0, 10);
+
+/**
+ * The window as { start, end }. Custom ranges are whole days in India time, from the
+ * start of `from` to the end of `to`; reversed dates are swapped and the end never
+ * runs past `now`. Missing dates default to the last seven days.
+ */
+export function windowRange(mode, now, session, range = {}) {
+  if (mode !== "custom") return { start: windowStart(mode, now, session), end: new Date(now) };
+  let from = range.from || istDate(now - 6 * 864e5), to = range.to || istDate(now);
+  if (from > to) [from, to] = [to, from];
+  const start = new Date(`${from}T00:00:00+05:30`);
+  const end = new Date(Math.min(now, new Date(`${to}T23:59:59.999+05:30`).getTime()));
+  return { start, end, from, to };
+}
+
 /** Unusual end-of-day moves by the investor's thresholds. */
 export function unusual(prices, { movePct, volX, lookback = 20 }) {
   const out = [];

@@ -48,10 +48,14 @@ def test_research_flow():
                                             "quarter": t["quarter"], "url": t["url"]})
         assert st == 200, out
         state = out["state"]
-    st, led = call("/api/ledger_finalize", {"state": state, "quarters": co["quarters"], "latest": co["latest_quarter"]})
+    st, biz = call("/api/business", {"symbol": "NWCABLE"})
+    assert st == 200 and biz["segments"] and biz["what_it_does"]
+    st, led = call("/api/ledger_finalize", {"state": state, "quarters": co["quarters"], "latest": co["latest_quarter"],
+                                            "fundamentals": co["fundamentals"], "business": biz})
     assert st == 200
     assert led["counts"]["missed"] == 1 and led["counts"]["dropped"] == 1
-    assert led["credibility"]
+    assert led["credibility"] and len(led["bull"]) == 3 and len(led["bear"]) == 3
+    assert co["fundamentals"]["balance"]["notes"]
 
 
 def test_bad_inputs():

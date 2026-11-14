@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from finn import gemini, ledger, moves, readers, triage  # noqa: E402
+from finn import business, fundamentals, gemini, ledger, moves, readers, triage  # noqa: E402
 from finn.classify import classify_batch_with_model, is_routine  # noqa: E402
 from finn.financials import complete_from_table, cross_check, results_card  # noqa: E402
 from finn.http import FetchError  # noqa: E402
@@ -48,6 +48,10 @@ DEADLINE = time.time() + 60 * float(os.environ.get("FINN_TIME_BUDGET_MIN", "35")
 
 def time_left() -> bool:
     return time.time() < DEADLINE
+
+
+# Web-searched backgrounds for appointees whose filing has no profile: a few per run.
+WEB_BIO_CAP = int(os.environ.get("FINN_WEB_BIO_CAP", "8"))
 
 
 def load(path: Path, default):
@@ -81,6 +85,7 @@ def build_company(sym: str, sector: str, use_ai: bool, n_calls: int, status: dic
         co = {"symbol": sym, "name": sym, "quarters": {"periods": [], "rows": {}}, "transcripts": [],
               "annual_reports": [], "bse_code": None, "basis": None}
     co["sector"] = sector
+    co["fundamentals"] = fundamentals.summarize(co)
     t0 = time.time()
     try:
         co["prices"] = prices.daily(sym, "6mo")
@@ -90,6 +95,17 @@ def build_company(sym: str, sector: str, use_ai: bool, n_calls: int, status: dic
         status["errors"].append(f"{sym} prices: {e}")
         log(f"  {sym} prices failed ({time.time()-t0:.0f}s): {str(e)[:120]}")
         co["prices"] = old.get("prices", [])
+
+    co["business"] = old.get("business")
+    ar = business.latest_report(co.get("annual_reports") or [])
+    if use_ai and ar and time_left():
+        t0 = time.time()
+        try:
+            co["business"] = business.read_business(co["name"], ar["url"], ar.get("label", "")) or co["business"]
+            log(f"  {sym} business snapshot: {len((co['business'] or {}).get('segments') or [])} segments ({time.time()-t0:.0f}s)")
+        except Exception as e:
+            status["errors"].append(f"{sym} annual report: {str(e)[:160]}")
+            log(f"  {sym} annual report failed ({time.time()-t0:.0f}s): {str(e)[:120]}")
 
     latest = co["quarters"]["periods"][-1] if co["quarters"]["periods"] else None
     calls = list(reversed(co["transcripts"][:n_calls]))  # oldest -> newest
@@ -108,7 +124,8 @@ def build_company(sym: str, sector: str, use_ai: bool, n_calls: int, status: dic
                 status["errors"].append(f"{sym} transcript {c['quarter']}: {e}")
                 log(f"  {sym} {c['quarter']} transcript failed: {e}")
         t0 = time.time()
-        co["ledger"] = ledger.finalize(state, co["quarters"], latest, use_model=True)
+        co["ledger"] = ledger.finalize(state, co["quarters"], latest, use_model=True,
+                                       context=ledger.context_for(co))
         log(f"  {sym} verdicts: {co['ledger'].get('verdict_model') or 'rules only'} ({time.time()-t0:.0f}s)")
     elif old.get("ledger"):
         co["ledger"] = old["ledger"]
@@ -171,6 +188,7 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
     todo = [it for it in items if triage.needs_reading(it) and not it.get("read") and it.get("attempts", 0) < 2]
     todo.sort(key=prio)
     used = 0
+    web_bios = [0]
     for it in todo:
         if not use_ai or used >= budget or not time_left():
             break
@@ -192,7 +210,16 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
                 it["model"] = ext.get("_model")
             elif kind == "person":
                 ppl = readers.read_person(it["attachment"])
-                it["card"] = {"type": "people", "changes": ppl.get("changes", [])}
+                changes = ppl.get("changes", [])
+                for c in changes:
+                    if (c.get("action") in ("appointed", "redesignated") and not (c.get("background") or "").strip()
+                            and web_bios[0] < WEB_BIO_CAP and time_left()):
+                        web_bios[0] += 1
+                        wb = readers.web_bio(c.get("name", ""), c.get("role", ""), it["name"],
+                                             c.get("action", "appointed"), c.get("effective") or "")
+                        if wb:
+                            c["web_background"] = wb
+                it["card"] = {"type": "people", "changes": changes}
                 if ppl.get("changes") and all(c.get("level") != "top" for c in ppl["changes"]):
                     it["subtype"], it["routine"] = "board", True
                 it["model"] = ppl.get("_model")
@@ -213,6 +240,21 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
             it["attempts"] = it.get("attempts", 0) + 1
             used += 1
     log(f"read {used} filings with the model (budget {budget}); {max(0, len(todo) - used)} left for next run")
+
+    # Backfill: people cards read on earlier runs, before web backgrounds existed.
+    if use_ai:
+        for it in items:
+            for c in (it.get("card") or {}).get("changes", []) if (it.get("card") or {}).get("type") == "people" else []:
+                if web_bios[0] >= WEB_BIO_CAP or not time_left():
+                    break
+                if (c.get("action") in ("appointed", "redesignated") and not (c.get("background") or "").strip()
+                        and "web_background" not in c and c.get("name")):
+                    web_bios[0] += 1
+                    wb = readers.web_bio(c["name"], c.get("role", ""), it["name"], c.get("action", "appointed"),
+                                         c.get("effective") or "")
+                    if wb:
+                        c["web_background"] = wb
+        log(f"web backgrounds looked up: {web_bios[0]}")
 
     for it in items:
         it["tier"] = triage.tier(it)

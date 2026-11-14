@@ -6,14 +6,16 @@ Arithmetic and judgement about importance stay in code.
 """
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from . import cache, gemini
 from .periods import quarter_label
 from .sources.exchanges import download_attachment
 
-V_RESULTS = "r3"
+V_RESULTS = "r4"
 V_PERSON = "p2"
+V_WEB_BIO = "w1"
 V_FILING = "f3"
 
 N = {"type": "NUMBER", "nullable": True}
@@ -51,7 +53,67 @@ Ignore half-year and full-year columns. Prefer the CONSOLIDATED statement if pre
 Use the document's own numbers and state the unit printed in the header (crore, lakh, million...).
 For banks/NBFCs set is_lender=true; revenue_from_operations = interest earned / revenue from operations,
 and fill operating_profit_before_provisions and provisions if printed.
+Read these lines carefully; they are often missed: "Finance costs", "Depreciation and amortisation expense",
+"Total expenses", "Profit before exceptional items and tax", "Profit before tax", "Net profit for the period"
+and "attributable to owners of the parent". Use the column headings to match each number to its quarter.
 Do not compute anything. Leave a field null if it is not printed. If this is not a results document, set is_results_document=false."""
+
+FILL_PROMPT = """The text below is from an Indian listed company's quarterly results filing. Earlier extraction missed
+some line items. For the three quarter columns (current quarter, previous quarter, same quarter last year) of the
+{basis} statement, fill in: {missing}. Copy numbers exactly as printed, in the document's own unit ({unit}).
+Leave null anything you cannot find. Do not compute.
+
+TEXT:
+{text}"""
+
+NEEDED = ("revenue_from_operations", "total_expenses", "finance_costs", "depreciation", "pbt", "pat")
+
+
+def _missing(data: dict) -> list[str]:
+    cur = next((p for p in data.get("periods") or [] if p.get("role") == "current"), None)
+    if not cur:
+        return list(NEEDED)
+    need = [k for k in NEEDED if cur.get(k) is None]
+    if data.get("is_lender"):
+        need = [k for k in need if k not in ("total_expenses", "depreciation", "finance_costs")]
+    return need
+
+
+def _results_text(pdf_bytes: bytes, max_chars: int = 40_000) -> str:
+    """Text of the pages that hold the statement of profit and loss."""
+    import io
+    from pypdf import PdfReader
+    pages = []
+    for page in PdfReader(io.BytesIO(pdf_bytes)).pages[:30]:
+        try:
+            t = page.extract_text() or ""
+        except Exception:
+            continue
+        low = t.lower()
+        if ("finance cost" in low or "depreciation" in low) and ("profit" in low or "revenue" in low):
+            pages.append(t)
+    return "\n---\n".join(pages)[:max_chars]
+
+
+def _fill_missing(data: dict, pdf_bytes: bytes) -> dict:
+    """Second, focused pass on the statement pages' text for lines the first pass left blank."""
+    need = _missing(data)
+    if not need:
+        return data
+    text = _results_text(pdf_bytes)
+    if not text:
+        return data
+    prompt = FILL_PROMPT.format(basis=data.get("basis") or "consolidated", missing=", ".join(need),
+                                unit=data.get("unit") or "as printed", text=text)
+    more, model = gemini.generate_json("read_pdf", [{"text": prompt}], RESULTS_SCHEMA)
+    by_role = {p.get("role"): p for p in more.get("periods") or []}
+    for p in data.get("periods") or []:
+        extra = by_role.get(p.get("role")) or {}
+        for k in NEEDED + ("other_income", "pat_attributable_to_owners", "profit_before_exceptional_and_tax"):
+            if p.get(k) is None and extra.get(k) is not None:
+                p[k] = extra[k]
+    data["_filled_by"] = model
+    return data
 
 
 PERSON_SCHEMA = {
@@ -121,10 +183,15 @@ def read_results(url: str) -> Optional[dict]:
     hit = cache.get(key)
     if hit is not None:
         return hit
-    data, model = gemini.generate_json("read_pdf", [gemini.pdf_part(_pdf(url)), {"text": RESULTS_PROMPT}], RESULTS_SCHEMA)
+    pdf = _pdf(url)
+    data, model = gemini.generate_json("read_pdf", [gemini.pdf_part(pdf), {"text": RESULTS_PROMPT}], RESULTS_SCHEMA)
     if not data.get("is_results_document"):
         data = {"is_results_document": False}
     else:
+        try:
+            data = _fill_missing(data, pdf)
+        except Exception:
+            pass  # the exchange-data check downstream still guards the card
         d = data.get("quarter_end_date") or ""
         if len(d) >= 7:
             y, m = int(d[:4]), int(d[5:7])
@@ -159,3 +226,37 @@ def read_filing(url: str, name: str, label: str, headline: str, promises: list[d
     data["_model"] = model
     cache.put(key, data)
     return data
+
+
+WEB_BIO_PROMPT = """Search the web for the professional background of {name}, who was {action} as {role} of
+{company} (an Indian listed company){when}. Answer in at most 45 words: prior employers and roles, years of
+experience, and qualifications. Only describe this specific person at this company. If the sources do not
+clearly refer to this person, reply with exactly UNKNOWN. Plain text, no preamble, no markdown."""
+
+
+def web_bio(name: str, role: str, company: str, action: str = "appointed", effective: str = "") -> Optional[dict]:
+    """Best-effort background from a grounded web search, for people whose filing carries no profile.
+    Returns {"text", "sources", "model"} or None. Never raises."""
+    key = cache.key_for("web_bio", f"{company}|{name}|{role}", V_WEB_BIO)
+    hit = cache.get(key)
+    if hit is not None:
+        return hit or None
+    prompt = WEB_BIO_PROMPT.format(name=name, role=role, company=company, action=action,
+                                   when=f", effective {effective}" if effective else "")
+    try:
+        text, model, sources = gemini.search_text("web_bio", prompt)
+    except gemini.NoKey:
+        return None
+    except gemini.GeminiError:
+        return None  # not cached: grounding may be available on a later run
+    text = re.sub(r"\[\d+(?:,\s*\d+)*\]", "", text).strip().strip('"')
+    text = re.sub(r"\s+([.,;:])", r"\1", text)
+    words = text.split()
+    if "UNKNOWN" in text.upper()[:20] or len(words) < 6 or not sources:
+        cache.put(key, {})
+        return None
+    if len(words) > 60:
+        text = " ".join(words[:60]).rstrip(",;") + "…"
+    out = {"text": text, "sources": sources, "model": model}
+    cache.put(key, out)
+    return out

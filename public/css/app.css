@@ -94,8 +94,11 @@ h1.title { font-size: var(--s3); line-height: 1.2; letter-spacing: -0.01em; marg
 
 /* segmented window picker */
 .seg { display: flex; gap: 2px; margin: 14px 0 4px; padding: 2px; border: 1px solid var(--rule); border-radius: 8px; width: max-content; max-width: 100%; overflow-x: auto; }
-.seg button { border: 0; background: none; padding: 6px 11px; border-radius: 6px; font-size: var(--s-1); color: var(--ink-2); white-space: nowrap; cursor: pointer; }
+.seg button { border: 0; background: none; padding: 6px 9px; border-radius: 6px; font-size: var(--s-1); color: var(--ink-2); white-space: nowrap; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--accent-wash); color: var(--ink); font-weight: 600; }
+.range { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 8px 0 2px; font-size: var(--s-1); color: var(--ink-2); }
+.range input { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 4px 6px; margin-left: 4px; }
+.range input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* ---- sections ------------------------------------------------------------- */
 .section { margin-top: 26px; }
@@ -145,6 +148,8 @@ h1.title { font-size: var(--s3); line-height: 1.2; letter-spacing: -0.01em; marg
 .person { margin-top: 8px; }
 .person .n { font-weight: 650; }
 .person .bio { font-size: var(--s0); color: var(--ink-2); margin: 2px 0 0; }
+.person .bio.web { font-family: var(--sans); border-left: 2px solid var(--rule); padding-left: 8px; }
+.person .bio.web .foot { display: block; margin-top: 2px; }
 
 /* buried */
 .buried { margin-top: 26px; border: 1px dashed var(--rule); border-radius: var(--radius); }
@@ -213,6 +218,41 @@ h1.title { font-size: var(--s3); line-height: 1.2; letter-spacing: -0.01em; marg
 .chart .hit { fill: transparent; cursor: pointer; }
 
 .src { font-size: var(--s-1); color: var(--ink-2); line-height: 1.6; }
+
+/* jump-to chips on the company page */
+.jump { display: flex; gap: 6px; overflow-x: auto; margin: 14px -2px 0; padding: 2px; scrollbar-width: none; }
+.jump::-webkit-scrollbar { display: none; }
+.jump button { flex: none; border: 1px solid var(--rule); background: var(--paper); border-radius: 999px; padding: 5px 11px; font-size: var(--s-1); color: var(--ink-2); cursor: pointer; }
+.jump button:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* stat pairs: label above value, two columns */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin: 4px 0 6px; }
+.stats > div { padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.stats dt { font-size: var(--s-1); color: var(--ink-3); }
+.stats dd { margin: 2px 0 0; font-weight: 650; font-size: var(--s1); }
+
+.facts { margin: 10px 0 4px; padding-left: 18px; font-size: var(--s0); color: var(--ink-2); line-height: 1.5; }
+.facts li { margin: 4px 0; }
+
+/* bull vs bear: two columns that stack on narrow screens */
+.bb { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 520px) { .bb { grid-template-columns: 1fr 1fr; } }
+.bb > div { border-top: 2px solid var(--rule); padding-top: 8px; }
+.bb > div:first-child { border-top-color: var(--kept); }
+.bb > div:last-child { border-top-color: var(--miss); }
+.bb h3 { font-size: var(--s0); margin: 0 0 4px; }
+.bb ul { margin: 0; padding-left: 18px; font-size: var(--s0); line-height: 1.5; }
+.bb li { margin: 5px 0; }
+
+/* business: the company's own description, and revenue mix */
+.said-block { font-family: var(--serif); font-size: var(--s1); line-height: 1.55; margin: 0 0 10px; }
+.mix { display: grid; gap: 7px; margin-top: 6px; }
+.mix-row { display: grid; grid-template-columns: minmax(90px, 38%) 1fr 40px; gap: 8px; align-items: center; font-size: var(--s0); }
+.mix-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mix-bar { height: 8px; background: var(--paper-2); border-radius: 4px; overflow: hidden; }
+.mix-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.mix-val { text-align: right; font-weight: 600; }
+.charts[hidden] { display: none; }
 .src a { text-decoration: none; }
 
 /* ---- research --------------------------------------------------------------- */

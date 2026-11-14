@@ -17,7 +17,8 @@ import traceback
 from pathlib import Path
 from urllib.parse import parse_qs
 
-from . import ledger
+from . import business as biz
+from . import fundamentals, ledger
 from .sources import exchanges, prices, screener
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -58,6 +59,7 @@ def company(q: dict) -> dict:
     except Exception:
         co["prices"] = []
     co["transcripts"] = co["transcripts"][:N_CALLS]
+    co["fundamentals"] = fundamentals.summarize(co)
     co["latest_quarter"] = co["quarters"]["periods"][-1] if co["quarters"]["periods"] else None
     return co
 
@@ -93,17 +95,32 @@ def ledger_step(body: dict) -> dict:
                            if e["quarter"] == quarter and e["kind"] != "not_mentioned")}
 
 
+def business(body: dict) -> dict:
+    """Business snapshot from the latest annual report screener lists for the company."""
+    sym = symbol(body.get("symbol"))
+    co = screener.fetch_company(sym)
+    ar = biz.latest_report(co.get("annual_reports") or [])
+    if not ar:
+        raise ApiError(404, "No annual report is listed for this company.")
+    out = biz.read_business(co["name"], ar["url"], ar.get("label", ""))
+    if not out:
+        raise ApiError(502, "The annual report could not be read.")
+    return out
+
+
 def ledger_finalize(body: dict) -> dict:
     state = body.get("state")
     if not state or "promises" not in state:
         raise ApiError(400, "Need a ledger state.")
-    return ledger.finalize(state, body.get("quarters") or {}, body.get("latest"), use_model=True)
+    ctx = ledger.context_for({"fundamentals": body.get("fundamentals"), "business": body.get("business")})
+    return ledger.finalize(state, body.get("quarters") or {}, body.get("latest"), use_model=True, context=ctx)
 
 
 ROUTES = {
     ("GET", "/api/company"): company,
     ("POST", "/api/ledger_step"): ledger_step,
     ("POST", "/api/ledger_finalize"): ledger_finalize,
+    ("POST", "/api/business"): business,
 }
 
 

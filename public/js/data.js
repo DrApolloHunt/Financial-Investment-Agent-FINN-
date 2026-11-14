@@ -98,9 +98,20 @@ export async function research(sym, onEvent) {
     }
   }
   if (!state) throw new Error("No earnings call could be read, so there is no ledger to build.");
+  let business = null;
+  if (co.annual_reports?.length) {
+    onEvent({ type: "business" });
+    try {
+      business = await api("/api/business", { symbol: co.symbol });
+      onEvent({ type: "businessread", business });
+    } catch (e) {
+      onEvent({ type: "businessfail", error: e.message });
+    }
+  }
   onEvent({ type: "judging" });
-  const ledger = await api("/api/ledger_finalize", { state, quarters: co.quarters, latest: co.latest_quarter });
-  const out = { ...co, ledger };
+  const ledger = await api("/api/ledger_finalize", { state, quarters: co.quarters, latest: co.latest_quarter,
+    fundamentals: co.fundamentals, business });
+  const out = { ...co, business, ledger };
   keepResearch(sym, out);
   return out;
 }

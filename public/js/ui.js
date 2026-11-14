@@ -138,7 +138,7 @@ export function barChart(id, labels, values, fmt) {
     <line class="gl" x1="0" x2="${w}" y1="${h - pad}" y2="${h - pad}"/>${bars}${ticks}</svg>`);
 }
 
-export function lineChart(id, labels, values) {
+export function lineChart(id, labels, values, { unit = "%" } = {}) {
   const w = 320, h = 92, pad = 16;
   const v = values.map((x) => (x == null ? null : x));
   const ok = v.filter((x) => x != null);
@@ -151,8 +151,8 @@ export function lineChart(id, labels, values) {
   const hits = v.map((x, i) => `<rect class="hit" data-i="${i}" x="${(i * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${h}"/>`).join("");
   return raw(`<svg id="${id}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Line chart">
     <line class="gl" x1="0" x2="${w}" y1="${h - pad}" y2="${h - pad}"/>
-    <text class="ax" x="0" y="${(y(hi) - 4).toFixed(1)}">${hi.toFixed(1)}%</text>
-    ${hi - lo >= 0.1 ? `<text class="ax" x="0" y="${(y(lo) + 12).toFixed(1)}">${lo.toFixed(1)}%</text>` : ""}
+    <text class="ax" x="0" y="${(y(hi) - 4).toFixed(1)}">${hi.toFixed(unit ? 1 : 0)}${unit}</text>
+    ${hi - lo >= 0.1 ? `<text class="ax" x="0" y="${(y(lo) + 12).toFixed(1)}">${lo.toFixed(unit ? 1 : 0)}${unit}</text>` : ""}
     <polyline class="ln" points="${pts.map((p) => p.map((c) => c.toFixed(1)).join(",")).join(" ")}"/>
     <circle class="dot" cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4"/>${hits}</svg>`);
 }

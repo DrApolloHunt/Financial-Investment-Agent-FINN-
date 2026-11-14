@@ -68,6 +68,46 @@ def table(sym: str) -> dict:
     return rows
 
 
+def annual_html(sym: str) -> str:
+    """Fictional 10-year annual tables in screener's layout."""
+    c = COMPANIES[sym]
+    years = list(range(2017, 2027))           # FY17..FY26
+    gy = (1 + c["g"]) ** 4 - 1
+    rev = [c["base"] * 4 * (1 + gy) ** (i - 10) * 1.0 for i in range(len(years))]
+    m = [c["m0"] + (c["m1"] - c["m0"]) * i / 9 - 1.5 + i * 0.15 for i in range(len(years))]
+    eb = [r * x / 100 for r, x in zip(rev, m)]
+    pat = [e * 0.62 for e in eb]
+    head = "".join(f"<th>Mar {y}</th>" for y in years) + "<th>TTM</th>"
+    ttm = lambda v: v[-1] * (1 + gy / 2)
+    def row(label, vals, pct=False):
+        return f"<tr><td class='text'>{label}</td>" + "".join(f"<td>{v:,.0f}{'%' if pct else ''}</td>" for v in vals) + "</tr>"
+    pl = (f"<section id='profit-loss'><table class='data-table'><thead><tr><th></th>{head}</tr></thead><tbody>"
+          + row("Revenue" if c["lender"] else "Sales", rev + [ttm(rev)])
+          + row("Financing Profit" if c["lender"] else "Operating Profit", eb + [ttm(eb)])
+          + row("Interest", [r * 0.02 for r in rev] + [ttm(rev) * 0.02])
+          + row("Net Profit", pat + [ttm(pat)]) + "</tbody></table></section>")
+    bh = "".join(f"<th>Mar {y}</th>" for y in years)
+    nw = [p * 6 for p in pat]
+    debt = [n * (2.5 if c["lender"] else 0.35 + (0.25 if sym == "ORBITEMS" else 0) * i / 9) for i, n in enumerate(nw)]
+    bs = (f"<section id='balance-sheet'><table class='data-table'><thead><tr><th></th>{bh}</tr></thead><tbody>"
+          + row("Equity Capital", [50] * 10) + row("Reserves", [n - 50 for n in nw]) + row("Borrowings", debt)
+          + row("Total Assets", [n + d + n * 0.4 for n, d in zip(nw, debt)]) + "</tbody></table></section>")
+    conv = {"ORBITEMS": 0.55, "NWCABLE": 0.78}.get(sym, 1.02)
+    cfo = [p * conv * (0.9 + 0.2 * ((i * 7) % 3) / 2) for i, p in enumerate(pat)]
+    cf = (f"<section id='cash-flow'><table class='data-table'><thead><tr><th></th>{bh}</tr></thead><tbody>"
+          + row("Cash from Operating Activity", cfo) + "</tbody></table></section>")
+    wc = [40 + (i * 4 if sym in ("ORBITEMS", "NWCABLE") else i) for i in range(10)]
+    ra = (f"<section id='ratios'><table class='data-table'><thead><tr><th></th>{bh}</tr></thead><tbody>"
+          + row("Working Capital Days", wc) + row("Cash Conversion Cycle", [w - 8 for w in wc])
+          + row("ROCE %", [m_ * 1.1 for m_ in m], pct=True) + "</tbody></table></section>")
+    mc = pat[-1] * 32
+    top = (f"<ul id='top-ratios'><li><span class='name'>Market Cap</span><span class='value'>₹ <span class='number'>{mc:,.0f}</span> Cr.</span></li>"
+           f"<li><span class='name'>Stock P/E</span><span class='value'><span class='number'>32.0</span></span></li>"
+           f"<li><span class='name'>ROE</span><span class='value'><span class='number'>{16 + (c['m1'] % 5):.1f}</span> %</span></li>"
+           f"<li><span class='name'>ROCE</span><span class='value'><span class='number'>{18 + (c['m1'] % 6):.1f}</span> %</span></li></ul>")
+    return top + pl + bs + cf + ra
+
+
 def screener_html(sym: str) -> str:
     c, t = COMPANIES[sym], table(sym)
     labels = {"revenue": "Revenue" if c["lender"] else "Sales", "expenses": "Expenses",
@@ -83,8 +123,9 @@ def screener_html(sym: str) -> str:
         f"<li><div>{CALL_MONTHS[q]}</div><a class='concall-link' href='https://fake.local/{sym}/{q.replace(' ', '_')}.pdf'>Transcript</a></li>"
         for q in reversed(CALLS[sym]))
     return f"""<html><body><h1>{c['name']}</h1><span>BSE: {c['bse']}</span><span>NSE: {sym}</span>
+{annual_html(sym)}
 <section id="quarters"><table><thead><tr><th></th>{head}</tr></thead><tbody>{body}</tbody></table></section>
-<div class="documents annual-reports"><ul><li><a href="https://fake.local/{sym}/AR2026.pdf">Financial Year 2026</a></li></ul></div>
+<div class="documents annual-reports"><ul><li><a href="https://fake.local/{sym}/AR2026.pdf">Financial Year 2026<div>from bse</div></a></li></ul></div>
 <div class="documents concalls"><ul>{calls}</ul></div></body></html>"""
 
 
@@ -303,13 +344,48 @@ TRANSCRIPTS = {
     ("LOTUSPNT", "Q2 FY27"): {"new_promises": [], "updates": [U("LOTUSPNT-26Q4-1", "reiterated")]},
 }
 
+BUSINESS = {
+    "NWCABLE": {"what_it_does": "Makes power and building wires and cables sold through 4,000 dealers, plus a small but growing export business to the Middle East.",
+                "segments": [{"name": "Wires & cables", "share_pct": 82}, {"name": "Electrical goods", "share_pct": 12}, {"name": "Exports", "share_pct": 6}],
+                "mix_basis": "by business segment, FY26", "other_facts": ["Five plants in Gujarat and Haryana", "Exports 6% of revenue"]},
+    "KESTREL": {"what_it_does": "Builds and runs software for banks and insurers in the US and Europe, billed mostly as multi-year managed-service contracts.",
+                "segments": [{"name": "Banking", "share_pct": 46}, {"name": "Insurance", "share_pct": 28}, {"name": "Retail", "share_pct": 16}, {"name": "Other", "share_pct": 10}],
+                "mix_basis": "by industry, FY26", "other_facts": ["Top 10 clients are 38% of revenue", "62,000 employees"]},
+    "ASTERDEF": {"what_it_does": "Designs and makes radar, communication and electronic-warfare systems, almost all for India's armed forces under long contracts.",
+                 "segments": [{"name": "Defence", "share_pct": 91}, {"name": "Civil", "share_pct": 9}],
+                 "mix_basis": "by customer, FY26", "other_facts": ["Order book of about three years of revenue"]},
+    "SAFFRON": {"what_it_does": "Lends to consumers for appliances, two-wheelers and personal needs, funded by bank loans and bonds.",
+                "segments": [{"name": "Consumer durables", "share_pct": 44}, {"name": "Personal loans", "share_pct": 36}, {"name": "Two-wheeler", "share_pct": 20}],
+                "mix_basis": "by loan book, FY26", "other_facts": ["1.2 crore customers"]},
+    "ORBITEMS": {"what_it_does": "Assembles phones, TVs and lighting for brands under contract; earns a thin margin on large volumes.",
+                 "segments": [{"name": "Mobile phones", "share_pct": 64}, {"name": "Consumer electronics", "share_pct": 24}, {"name": "Lighting", "share_pct": 12}],
+                 "mix_basis": "by business segment, FY26", "other_facts": ["Top three customers are 58% of revenue"]},
+    "LOTUSPNT": {"what_it_does": "Sells decorative paints through 70,000 dealers and a small industrial-coatings arm.",
+                 "segments": [{"name": "Decorative", "share_pct": 86}, {"name": "Industrial", "share_pct": 14}],
+                 "mix_basis": "by business segment, FY26", "other_facts": ["Seven factories"]},
+}
+
 PEOPLE = {"changes": [
     {"name": "Meera Raghavan", "role": "Chief Financial Officer", "action": "appointed", "level": "top",
      "effective": "11 Nov 2026",
      "background": "Chartered accountant with 22 years in finance; previously CFO of Delta Components and treasury head at a consumer-durables maker.",
      "previous_employers": ["Delta Components", "Brightline Appliances"], "reason": ""},
     {"name": "Anil Joshi", "role": "Chief Financial Officer", "action": "resigned", "level": "top",
-     "effective": "10 Nov 2026", "background": "", "previous_employers": [], "reason": "to pursue opportunities outside the company"}]}
+     "effective": "10 Nov 2026", "background": "", "previous_employers": [], "reason": "to pursue opportunities outside the company"},
+    {"name": "Kavita Menon", "role": "Independent Director", "action": "appointed", "level": "board",
+     "effective": "11 Nov 2026", "background": "", "previous_employers": [], "reason": ""}]}
+
+WEB_BIOS = {"Kavita Menon": "Former audit partner at a fictional accounting firm for 18 years; sits on two other listed boards and chairs their audit committees. Commerce graduate and chartered accountant."}
+
+
+def search_text(task, prompt, temperature=0.1, max_wait=20.0):
+    from finn import gemini
+    model = gemini.route(task)[0]
+    gemini.METER.add(model, {"promptTokenCount": 300, "candidatesTokenCount": 80})
+    for name, bio in WEB_BIOS.items():
+        if name in prompt:
+            return bio, model, [{"title": "example.org", "url": "https://example.org/people/kavita-menon"}]
+    return "UNKNOWN", model, []
 
 
 def _results(sym: str) -> dict:
@@ -371,22 +447,39 @@ def generate_json(task, parts, schema=None, system=None, temperature=0.1, max_wa
                 links = [{"promise_id": pid, "effect": eff, "note": note}] if pid and pid in prompt else []
                 return {"one_line": one, "importance": imp, "why": why, "promise_links": links}, model
         return {"one_line": "Routine update.", "importance": "low", "why": "No bearing on numbers.", "promise_links": []}, model
-    if "judging management's promise-keeping" in prompt:
-        ledger_blob = json.loads(prompt.split("Ledger:", 1)[1])
+    if "You are an analyst judging" in prompt:
+        ledger_blob = json.loads(prompt.split("Ledger:", 1)[1].split("Figures and annual report:", 1)[0])
         lines = [{"id": p["id"], "line": f"{p['said']} — {p['status'].replace('_', ' ')}."} for p in ledger_blob]
         bad = sum(1 for p in ledger_blob if p["status"] in ("missed", "slipping", "dropped"))
         cred = ("Delivers on headline growth but trims margin guidance quietly and lets capacity dates slide without saying so."
                 if bad >= 2 else "Guides conservatively and has met most of what it promised over five calls.")
-        return {"credibility": cred, "lines": lines, "overrides": []}, model
+        ctx = prompt.split("Figures and annual report:", 1)[1]
+        growth = re.search(r"compounded ([\d.]+)% a year", ctx)
+        conv = re.search(r"cash flow was (\d+)% of reported profit", ctx)
+        bull = [f"Revenue has compounded {growth.group(1) if growth else 'steadily'}% a year for five years, so the growth record is long, not one good year.",
+                "Order and volume promises were mostly reiterated call after call rather than quietly withdrawn.",
+                "Low borrowings leave room to fund the capacity management keeps promising."]
+        bear = [f"Only {conv.group(1) if conv else 'part'}% of reported profit turned into operating cash over five years.",
+                f"{bad} promises are missed, slipping or dropped: guidance is softer than it sounds." if bad else "Guidance is rarely specific, so there is little to hold management to.",
+                "Margins have moved sideways for five years despite the growth."]
+        return {"credibility": cred, "lines": lines, "overrides": [], "bull": bull, "bear": bear}, model
+    if "pages from" in prompt and "annual report" in prompt:
+        sym = re.search(r"fake\.local/(\w+)/AR", prompt)
+        sym = sym.group(1) if sym else "NWCABLE"
+        return json.loads(json.dumps(BUSINESS.get(sym, BUSINESS["NWCABLE"]))), model
     if "Classify each" in prompt:
         ids = re.findall(r"^(\S+)\t", prompt, re.M)
         return {"items": [{"id": i, "category": "unclassified"} for i in ids]}, model
     return {"ok": True}, model
 
 
+def pick_pages(pdf_bytes: bytes):
+    return "--- page 4 ---\nAnnual report text for " + pdf_bytes.decode(errors="ignore"), [4]
+
+
 def install(monkeypatch_setattr):
     """Patch FINN's source and model functions with the fakes."""
-    from finn import gemini, ledger, readers
+    from finn import business, gemini, ledger, readers
     from finn.sources import exchanges, prices, screener
     import pipeline.run as run
     for mod, name, fn in [
@@ -395,6 +488,7 @@ def install(monkeypatch_setattr):
         (exchanges, "announcements", announcements), (run.exchanges, "announcements", announcements),
         (exchanges, "download_attachment", download_attachment), (run.exchanges, "download_attachment", download_attachment),
         (readers, "download_attachment", download_attachment),
-        (gemini, "generate_json", generate_json),
+        (business, "download_attachment", download_attachment), (business, "pick_pages", pick_pages),
+        (gemini, "generate_json", generate_json), (gemini, "search_text", search_text),
     ]:
         monkeypatch_setattr(mod, name, fn)

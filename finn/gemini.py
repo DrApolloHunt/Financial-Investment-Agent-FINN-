@@ -30,6 +30,7 @@ ROUTES: dict[str, list[str]] = {
     "read_pdf": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
     "promises": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
     "verdict": ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+    "web_bio": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
 }
 
 # Free-tier requests per minute (conservative). Unknown models default to 5.
@@ -150,10 +151,11 @@ def _is_daily(err: dict) -> bool:
     return "PerDay" in blob or "per day" in blob.lower()
 
 
-def generate_json(task: str, parts: list[dict], schema: Optional[dict] = None,
-                  system: Optional[str] = None, temperature: float = 0.1,
-                  max_wait: float = 45.0) -> tuple[Any, str]:
-    """Run a task through its route. Returns (parsed_json, model_used)."""
+def _call(task: str, parts: list[dict], schema: Optional[dict], json_mode: bool,
+          system: Optional[str], temperature: float, max_wait: float,
+          tools: Optional[list] = None, accept=None) -> tuple[Any, str, dict]:
+    """Shared request loop: route fallback, throttling, 429/5xx handling.
+    `accept(text, candidate)` turns a reply into a result or raises ValueError to retry."""
     key = api_key()
     errors = []
     for model in route(task):
@@ -161,13 +163,14 @@ def generate_json(task: str, parts: list[dict], schema: Optional[dict] = None,
             continue
         use_schema = schema is not None
         for attempt in range(3):
-            body: dict = {
-                "contents": [{"role": "user", "parts": parts}],
-                "generationConfig": {"temperature": temperature,
-                                     "responseMimeType": "application/json"},
-            }
-            if use_schema:
-                body["generationConfig"]["responseSchema"] = schema
+            cfg: dict = {"temperature": temperature}
+            if json_mode:
+                cfg["responseMimeType"] = "application/json"
+                if use_schema:
+                    cfg["responseSchema"] = schema
+            body: dict = {"contents": [{"role": "user", "parts": parts}], "generationConfig": cfg}
+            if tools:
+                body["tools"] = tools
             if system:
                 body["systemInstruction"] = {"parts": [{"text": system}]}
             _throttle(model)
@@ -191,7 +194,7 @@ def generate_json(task: str, parts: list[dict], schema: Optional[dict] = None,
                     parts = parts + [{"text": "Do not quote long passages verbatim; paraphrase and keep any quote under 20 words."}]
                     continue
                 try:
-                    return _parse_json(text), model
+                    return accept(text, c), model, c
                 except (json.JSONDecodeError, ValueError):
                     errors.append(f"{model}: unparseable output")
                     continue
@@ -222,6 +225,37 @@ def generate_json(task: str, parts: list[dict], schema: Optional[dict] = None,
             errors.append(f"{model}: {r.status_code} {err.get('message', '')[:160]}")
             break
     raise GeminiError("; ".join(errors) or f"all models for '{task}' unavailable")
+
+
+def generate_json(task: str, parts: list[dict], schema: Optional[dict] = None,
+                  system: Optional[str] = None, temperature: float = 0.1,
+                  max_wait: float = 45.0) -> tuple[Any, str]:
+    """Run a task through its route. Returns (parsed_json, model_used)."""
+    data, model, _ = _call(task, parts, schema, True, system, temperature, max_wait,
+                           accept=lambda text, c: _parse_json(text))
+    return data, model
+
+
+def search_text(task: str, prompt: str, temperature: float = 0.1,
+                max_wait: float = 20.0) -> tuple[str, str, list[dict]]:
+    """A plain-text answer grounded in Google Search. Returns (text, model, sources).
+    Search grounding may not be offered on every free-tier model; callers treat
+    any GeminiError as "no answer"."""
+    def accept(text, c):
+        if not text.strip():
+            raise ValueError("empty")
+        return text.strip()
+    text, model, cand = _call(task, [{"text": prompt}], None, False, None, temperature, max_wait,
+                              tools=[{"google_search": {}}], accept=accept)
+    meta = cand.get("groundingMetadata") or {}
+    sources, seen = [], set()
+    for ch in meta.get("groundingChunks") or []:
+        web = ch.get("web") or {}
+        uri, title = web.get("uri"), web.get("title") or ""
+        if uri and uri.startswith("http") and title not in seen:
+            seen.add(title)
+            sources.append({"title": title or uri, "url": uri})
+    return text, model, sources[:3]
 
 
 def list_models() -> list[str]:

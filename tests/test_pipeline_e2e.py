@@ -29,10 +29,20 @@ def test_pipeline_full_run(tmp_path):
     # CFO change carries the profile from the filing
     cfo = next(it for it in feed if "Meera" in it["headline"])
     assert cfo["card"]["changes"][0]["background"]
+    assert "web_background" not in cfo["card"]["changes"][0]          # the filing's own profile wins
+    director = next(c for c in cfo["card"]["changes"] if c["name"] == "Kavita Menon")
+    assert director["web_background"]["sources"][0]["url"].startswith("https://")
+    assert "web_background" not in next(c for c in cfo["card"]["changes"] if c["action"] == "resigned")
     # ledgers: management's 'delivered' contradicted by exchange data
     nw = json.loads((out / "companies" / "NWCABLE.json").read_text(encoding="utf-8"))["ledger"]
     p = next(p for p in nw["promises"] if p["id"] == "NWCABLE-26Q2-1")
     assert p["status"] == "missed" and p["contradiction"]
     assert any(c["symbol"] == "NWCABLE" and c["recent"] for c in port["companies"])
+    # annual fundamentals, business snapshot, bull and bear
+    nwc = json.loads((out / "companies" / "NWCABLE.json").read_text())
+    assert nwc["fundamentals"]["trajectory"]["rev_cagr_5y"] and nwc["fundamentals"]["cash"]["conversion"]
+    assert nwc["business"]["segments"][0]["name"] == "Wires & cables" and nwc["business"]["year"] == "FY26"
+    assert len(nwc["ledger"]["bull"]) == 3 and len(nwc["ledger"]["bear"]) == 3
+    assert "78%" in " ".join(nwc["ledger"]["bear"])          # bear case grounded in the computed cash conversion
     # every model call was routed and metered
     assert set(meta["usage_last_run"]["calls"]) <= {"gemini-3.5-flash-lite", "gemini-3.8-flash"}
