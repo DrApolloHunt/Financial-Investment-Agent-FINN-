@@ -112,6 +112,7 @@ main:focus { outline: none; }
 .where { display: grid; line-height: 1.2; min-width: 0; }
 .where b { font: 700 var(--s0)/1.2 var(--display); }
 .where span { font-size: var(--s-1); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brandrow .iconbtn + .iconbtn { margin-left: 0; }
 .iconbtn { margin-left: auto; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--card); box-shadow: var(--shadow); color: var(--ink); text-decoration: none; flex: none; border: 0; cursor: pointer; }
 .iconbtn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -473,6 +474,22 @@ main:focus { outline: none; }
 .usage td { padding: 10px 0; border-top: 1px solid var(--line); }
 .usage tr:first-child td { border-top: 0; }
 .usage td:last-child { text-align: right; font: 700 var(--s0) var(--display); }
+
+/* phone alerts */
+.alerts > h2 { display: flex; align-items: center; gap: 8px; }
+.alerts > h2 svg { width: 20px; height: 20px; fill: none; stroke: var(--brand); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.steps-n { margin: 4px 0 6px; padding-left: 20px; font-size: var(--s0); line-height: 1.5; }
+.steps-n li { margin: 10px 0; padding-left: 4px; }
+.steps-n .d { display: block; margin-top: 8px; font-size: var(--s-1); color: var(--ink-3); }
+.sub-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.sub-row code { font: 500 var(--s-1) ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--sunk); padding: 6px 8px; border-radius: 8px; }
+.recent-h { font-size: var(--s0); margin: 16px 0 4px; }
+.alog { list-style: none; margin: 0; padding: 0; }
+.alog li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 0; border-top: 1px solid var(--line); font-size: var(--s-1); }
+.alog li:first-child { border-top: 0; }
+.alog b { font: 700 var(--s0) var(--display); }
+.alog span { grid-column: 1; color: var(--ink-2); }
+.alog time { grid-row: 1; grid-column: 2; color: var(--ink-3); white-space: nowrap; }
 
 .empty { margin-top: 18px; padding: 28px 20px; text-align: center; color: var(--ink-2); background: var(--card); border-radius: var(--r-card); box-shadow: var(--shadow); }
 .empty b { color: var(--ink); display: block; font: 700 var(--s2) var(--display); margin-bottom: 6px; }

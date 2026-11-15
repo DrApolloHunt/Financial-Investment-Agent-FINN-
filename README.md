@@ -29,7 +29,10 @@ actually reported. That ledger is how FINN decides what matters:
   hours, 3 or 7 days, since your last visit, or any dates you pick. Management changes
   carry the appointee's background from the filing. **Brief me** reads the few things
   that matter aloud, in the phone's own voice, outlining each card as it goes, for an
-  investor between meetings.
+  investor between meetings. **Phone alerts** arrive through the free
+  [ntfy](https://ntfy.sh) app after each hourly refresh: results, filings that bear on a
+  promise, material filings, and unusual moves, each sent once; tapping one opens the
+  company in FINN. Subscribe from Settings → Phone alerts (topic `finn-alerts-64d40bf1`).
 - **Pull.** Type any NSE symbol. FINN reads the last five earnings-call transcripts,
   lists the promises, follows each one through later calls (repeated, raised, cut,
   delivered, or quietly dropped), and checks the numeric ones against exchange-reported
@@ -81,6 +84,9 @@ app again, run `python -m pipeline.freeze --latest` and commit `public/data/meta
 to stop refreshing, remove the `schedule` lines from `.github/workflows/finn-data.yml`.
 
 **Known gaps:**
+- Phone alerts use the default thresholds (±4% price, 2× volume). The thresholds in
+  Settings change what the app shows on that phone; per-person alerts would need accounts.
+  The ntfy topic is public, as all ntfy.sh topics are.
 - Trent holds no earnings calls, so it has no promises; its bull and bear cases come from its figures alone.
 - HDFC Bank gives no numeric guidance, so it has no promises either.
 - Maruti's older transcripts sit on its own website, which refused the download.

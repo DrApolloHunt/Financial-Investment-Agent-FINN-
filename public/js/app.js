@@ -22,7 +22,7 @@ const routes = [
   [/^#\/ledgers$/, "ledgers", ledgersView],
   [/^#\/c\/([A-Za-z0-9&-]+)$/, "ledgers", companyView],
   [/^#\/research(?:\/([A-Za-z0-9&-]+))?$/, "research", researchView],
-  [/^#\/settings$/, "settings", settingsView],
+  [/^#\/settings(?:\/(alerts))?$/, "settings", settingsView],
 ];
 
 let token = 0;

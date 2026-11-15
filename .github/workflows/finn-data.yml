@@ -4,7 +4,9 @@ name: finn-data
 #   10:00-15:00 IST Mon-Fri, hourly   intraday  new filings only
 #   19:10 IST Mon-Fri                 eod       new filings and the day's closing prices
 #   09:30 IST Saturday                full      also new transcripts, annual reports and verdicts
-# Can also be started by hand (Actions -> finn-data -> Run workflow).
+# After each run, new items that matter go out as phone alerts through ntfy (finn/alerts.py).
+# Can also be started by hand (Actions -> finn-data -> Run workflow); mode "test-alert"
+# only sends a test alert.
 # `python -m pipeline.freeze` turns the app back to the last snapshot.
 on:
   schedule:
@@ -14,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "full | intraday | eod"
+        description: "full | intraday | eod | test-alert"
         default: "full"
 
 permissions:
@@ -40,6 +42,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FINN_LLM_BUDGET: "120"
           FINN_TIME_BUDGET_MIN: "50"
+          FINN_ALERTS: "1"
         run: |
           MODE="${{ github.event.inputs.mode }}"
           case "${{ github.event.schedule }}" in
@@ -48,7 +51,11 @@ jobs:
             "0 4 * * 6")     MODE=full ;;
           esac
           echo "mode: ${MODE:-full}"
-          python -m pipeline.run --mode "${MODE:-full}"
+          if [ "$MODE" = "test-alert" ]; then
+            python -m finn.alerts --test
+          else
+            python -m pipeline.run --mode "${MODE:-full}"
+          fi
       - name: Commit data
         run: |
           git config user.name "finn-bot"

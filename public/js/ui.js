@@ -55,7 +55,8 @@ export function when(iso) {
 }
 export const day = (isoDate) => df.format(new Date(isoDate + "T12:00:00+05:30"));
 export function ago(iso) {
-  const m = Math.round((nowMs() - new Date(iso)) / 6e4);
+  const m = Math.max(0, Math.round((nowMs() - new Date(iso)) / 6e4));
+  if (m < 1) return "just now";
   if (m < 60) return `${m} min ago`;
   const h = Math.round(m / 60);
   if (h < 36) return `${h} h ago`;

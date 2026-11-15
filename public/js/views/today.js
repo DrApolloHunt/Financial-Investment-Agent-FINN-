@@ -208,6 +208,7 @@ function topbar(port) {
     <div class="brandrow">
       <a class="logo" href="#/" aria-label="FINN home">${logo()}<span class="wm">FINN</span></a>
       ${n ? html`<span class="where"><b>My portfolio</b><span>${n} companies</span></span>` : ""}
+      <a class="iconbtn" href="#/settings/alerts" aria-label="Phone alerts">${icon("bell")}</a>
       <a class="iconbtn" href="#/settings" aria-label="Settings">${icon("sliders")}</a>
     </div>
     <a class="search" href="#/research">${icon("search")}<span>Research any NSE company</span></a>

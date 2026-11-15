@@ -21,6 +21,7 @@ async function getJSON(url, { fresh = false } = {}) {
 export const meta = () => getJSON(BASE + "meta.json");
 export const portfolio = () => getJSON(BASE + "portfolio.json");
 export const feed = () => getJSON(BASE + "feed.json");
+export const alerts = () => getJSON(BASE + "alerts.json");
 
 export async function company(sym) {
   try {

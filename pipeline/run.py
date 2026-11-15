@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from finn import business, fundamentals, gemini, ledger, moves, readers, triage  # noqa: E402
+from finn import alerts  # noqa: E402
 from finn.classify import classify_batch_with_model, is_routine  # noqa: E402
 from finn.financials import complete_from_table, cross_check, results_card  # noqa: E402
 from finn.http import FetchError  # noqa: E402
@@ -439,6 +440,8 @@ def main(argv=None):
         "defaults": CONFIG["defaults"],
     })
     save(DATA / "meta.json", meta)
+    if os.environ.get("FINN_ALERTS") == "1":      # set by the scheduled workflow only
+        alerts.run(items, companies, CONFIG, DATA, log=log)
     log(f"done in {meta['seconds']}s; model calls {usage['calls']}; errors {len(status['errors'])}")
     for e in status["errors"][:15]:
         log("  !", e)
