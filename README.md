@@ -6,14 +6,14 @@
   <tr>
     <td><img src="docs/today.png" width="200" alt="Today: the filings that matter as cards, the rest buried"></td>
     <td><img src="docs/ledger.png" width="200" alt="Bharat Electronics: FINN's read and the promise ledger"></td>
+    <td><img src="docs/ask.png" width="200" alt="Ask on the next call: questions for management built from the ledger"></td>
     <td><img src="docs/bullbear.png" width="200" alt="Bull and bear cases argued from the company's own numbers and promises"></td>
-    <td><img src="docs/ledgers.png" width="200" alt="Ledgers: every company's promises at a glance, filterable"></td>
   </tr>
   <tr>
-    <td>Today: what moved a promise, the rest buried</td>
+    <td>Today: what matters, the rest buried; Brief me reads it aloud</td>
     <td>A company: FINN's read, then every promise</td>
+    <td>Ask on the next call</td>
     <td>Bull vs bear, argued from the page</td>
-    <td>Every company's track record</td>
   </tr>
 </table>
 
@@ -59,8 +59,9 @@ The deployed app runs on **live data, refreshed automatically** by a free GitHub
 | 7:10 pm, Monday to Friday | New filings and the day's closing prices |
 | 9:30 am, Saturday | Everything, including new earnings-call transcripts, annual reports and verdicts |
 
-Until the first scheduled refresh (Monday 16 Nov, 10:00 am IST), it shows the snapshot it
-started from: real data as of 15 Nov 2026, 12:16 am IST. That snapshot holds:
+It started from a frozen snapshot of real data as of 15 Nov 2026, 12:16 am IST, and
+switched to live data on the evening of 15 Nov. The figures quoted in this README come
+from that snapshot, which held:
 
 - **Promise ledgers** from the last five earnings calls of 18 NSE companies, plus 5 more prepared for research.
 - **Exchange filings** from the previous 30 days: 212 of them.
@@ -68,9 +69,9 @@ started from: real data as of 15 Nov 2026, 12:16 am IST. That snapshot holds:
 - **Company pages**: business snapshots read from each latest annual report, bull and bear
   cases, ten-year figures, balance sheet and cash quality.
 
-While the snapshot is showing, times in the app ("the last 24 hours") are measured from
-that moment, and a note on the Today screen says so. After a refresh, they are measured
-from now, and Settings shows when the data was last refreshed.
+Times in the app ("the last 24 hours") are measured from now, and Today shows when the
+data was last refreshed. Frozen again with `pipeline.freeze`, they are measured from the
+snapshot's moment instead, and a note on Today says so.
 
 **The Research tab is always live:** type any NSE symbol and FINN reads its transcripts and
 annual report and builds the ledger on demand.
