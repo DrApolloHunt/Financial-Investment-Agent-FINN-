@@ -47,8 +47,16 @@ numbers. No news, broker notes or model memory.
 
 ## About the demo data
 
-The deployed app shows a **frozen snapshot of real data as of 15 Nov 2026, 12:16 am IST**,
-just after the last filing before the data was collected that afternoon:
+The deployed app runs on **live data, refreshed automatically** by a free GitHub Action:
+
+| When (IST) | What it refreshes |
+|---|---|
+| 1:00 pm, Monday to Friday | New exchange filings |
+| 7:10 pm, Monday to Friday | New filings and the day's closing prices |
+| 9:30 am, Saturday | Everything, including new earnings-call transcripts, annual reports and verdicts |
+
+Until the first scheduled refresh (Monday 16 Nov, 1:00 pm IST), it shows the snapshot it
+started from: real data as of 15 Nov 2026, 12:16 am IST. That snapshot holds:
 
 - **Promise ledgers** from the last five earnings calls of 18 NSE companies, plus 5 more prepared for research.
 - **Exchange filings** from the previous 30 days: 212 of them.
@@ -56,18 +64,18 @@ just after the last filing before the data was collected that afternoon:
 - **Company pages**: business snapshots read from each latest annual report, bull and bear
   cases, ten-year figures, balance sheet and cash quality.
 
-Times in the app ("the last 24 hours") are measured from that moment, and a note on the
-Today screen says so. Freezing the data keeps the demo stable and inside free-tier limits.
+While the snapshot is showing, times in the app ("the last 24 hours") are measured from
+that moment, and a note on the Today screen says so. After a refresh, they are measured
+from now, and Settings shows when the data was last refreshed.
 
-**What stays live:** the Research tab. Type any NSE symbol and FINN reads its transcripts
-and builds the ledger on demand.
+**The Research tab is always live:** type any NSE symbol and FINN reads its transcripts and
+annual report and builds the ledger on demand.
 
-**To switch to live data:** go to GitHub, then Actions → finn-data → Run workflow. A full refresh takes about 45 minutes on
-the free tier and turns snapshot mode off. `python -m pipeline.freeze` turns it back on
-(`--latest` sets the clock just after the newest filing). To refresh
-automatically, add a schedule to `.github/workflows/finn-data.yml`; the file shows how.
+**To refresh by hand:** on GitHub, open Actions → finn-data → Run workflow. To freeze the
+app again, run `python -m pipeline.freeze --latest` and commit `public/data/meta.json`;
+to stop refreshing, remove the `schedule` lines from `.github/workflows/finn-data.yml`.
 
-**Known gaps in the snapshot:**
+**Known gaps:**
 - Trent holds no earnings calls, so it has no promises; its bull and bear cases come from its figures alone.
 - HDFC Bank gives no numeric guidance, so it has no promises either.
 - Maruti's older transcripts sit on its own website, which refused the download.
@@ -76,7 +84,7 @@ automatically, add a schedule to `.github/workflows/finn-data.yml`; the file sho
 - On the day of the final run, Flash's free tier allowed one call: BEL's bull and bear
   cases were written by Flash, the others by Flash-Lite. A later run retries Flash.
 - Web backgrounds for appointees whose filing has no profile are built, but Google's
-  free tier refused every search-grounded call, so none appear in this snapshot.
+  free tier refused every search-grounded call, so none appear in the data.
 
 ---
 
@@ -104,8 +112,8 @@ cached, the next run continues where it stopped.
 1. Push this repo to GitHub (public, so Actions minutes are free).
 2. In the repo settings, add the Actions secret `GEMINI_API_KEY`, and under Actions set
    workflow permissions to "Read and write" so the data job can commit.
-   `.github/workflows/finn-data.yml` runs when you start it (Actions → finn-data → Run
-   workflow); add the schedule shown in the file to refresh automatically.
+   `.github/workflows/finn-data.yml` then refreshes on the schedule above; it can also be
+   started by hand (Actions → finn-data → Run workflow).
 3. In Vercel, import the repo with the **Python** preset. Add the environment variable
    `GEMINI_API_KEY` and deploy. `app.py` is the entry point: one WSGI app serving the
    research API at `/api/*`; the static app in `public/` is served by Vercel's CDN.
