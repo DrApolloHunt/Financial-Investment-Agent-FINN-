@@ -215,7 +215,7 @@ function resultsCard(c) {
     ${c.lender ? html`<p class="foot">${c.ebitda_note}</p>` : ""}
     ${c.promise_check?.length ? html`<div class="check">${c.promise_check.map((p) => html`<div>
       ${mark(p.verdict === "below" ? "slipping" : "on_track", p.verdict)}
-      <span><span style="font-family:var(--serif)">${p.statement}</span><br><span class="foot">This quarter, against ${target({ ...p.target, unit: "%" })}</span></span>
+      <span><span style="font-family:var(--serif)">${p.statement}</span><br><span class="foot">This quarter, against ${target({ ...p.target, unit: "%" })}${p.was && target({ ...p.was, unit: "%" }) !== target({ ...p.target, unit: "%" }) ? `, revised from ${target({ ...p.was, unit: "%" })}` : ""}</span></span>
       <span class="val ${p.verdict === "below" ? "neg" : "pos"}">${p.value.toFixed(1)}%</span></div>`)}</div>` : ""}
     ${c.filled_from_table?.length ? html`<p class="foot">${c.filled_from_table.join(", ").replace(/, ([^,]*)$/, " and $1")} taken from the exchange's quarterly data, because the filing could not be read cleanly for ${c.filled_from_table.length > 1 ? "them" : "it"}.</p>` : ""}
     ${c.cross_check === true ? html`<p class="foot">Revenue and profit match the exchange's quarterly data.</p>`

@@ -47,11 +47,11 @@ numbers. No news, broker notes or model memory.
 
 ## About the demo data
 
-The deployed app shows a **frozen snapshot of real data as of 13 Nov 2026, 6:32 pm IST**,
-just after the last filing before the data was collected on 14 Nov:
+The deployed app shows a **frozen snapshot of real data as of 15 Nov 2026, 12:16 am IST**,
+just after the last filing before the data was collected that afternoon:
 
 - **Promise ledgers** from the last five earnings calls of 18 NSE companies, plus 5 more prepared for research.
-- **Exchange filings** from the previous 30 days: 214 of them.
+- **Exchange filings** from the previous 30 days: 212 of them.
 - **Prices**: six months of daily closing prices and volumes.
 - **Company pages**: business snapshots read from each latest annual report, bull and bear
   cases, ten-year figures, balance sheet and cash quality.
@@ -68,15 +68,15 @@ the free tier and turns snapshot mode off. `python -m pipeline.freeze` turns it 
 automatically, add a schedule to `.github/workflows/finn-data.yml`; the file shows how.
 
 **Known gaps in the snapshot:**
-- Trent holds no earnings calls, so it has no promises.
+- Trent holds no earnings calls, so it has no promises; its bull and bear cases come from its figures alone.
 - HDFC Bank gives no numeric guidance, so it has no promises either.
 - Maruti's older transcripts sit on its own website, which refused the download.
 - Where a results PDF could not be read cleanly, the card uses the exchange's quarterly
   figures and says so.
-- The bull and bear cases in this snapshot were written by Flash-Lite: Flash's free daily
-  quota was already spent on the day of the run.
-- Five "worth knowing" filings from 2–12 Nov were not read before the run's time budget
-  ran out, so they show the exchange's own headline instead of a one-line summary.
+- On the day of the final run, Flash's free tier allowed one call: BEL's bull and bear
+  cases were written by Flash, the others by Flash-Lite. A later run retries Flash.
+- Web backgrounds for appointees whose filing has no profile are built, but Google's
+  free tier refused every search-grounded call, so none appear in this snapshot.
 
 ---
 
@@ -135,7 +135,7 @@ GitHub Action (on demand)                                 Vercel
 | Read transcripts, results, management-change filings, annual reports | `gemini-3.5-flash-lite` (free tier, ~500/day) | Bulk extraction; the cheap model is enough |
 | Results lines the first read missed | A second Flash-Lite pass on the text of the statement pages only; then a check against the exchange's quarterly table | A misread card is worse than a late one |
 | Annual report | Code picks the ~14 pages about the business and segments; Flash-Lite reads only those | A 300-page PDF does not fit the free tier; the right 14 pages do |
-| Appointee background missing from the filing | Flash-Lite with Google Search grounding; shown only with sources, and labelled | Best effort; "UNKNOWN" is an allowed answer |
+| Appointee background missing from the filing | Flash-Lite with Google Search grounding; shown only with sources, and labelled | Best effort; "UNKNOWN" is an allowed answer. The free tier currently refuses these calls |
 | Promise verdicts, credibility read, bull and bear | `gemini-3.8-flash` (free tier, ~20/day), falls back to Flash-Lite | The one step that needs judgment, once per company |
 | Arithmetic (QoQ, YoY, EBITDA, margins, CAGR, debt/equity, cash conversion, promise checks) | Plain Python | Models extract numbers; code does the maths |
 | Status of each promise | Explicit rules in `finn/ledger.py` | Explainable; the model may override only with a stated reason |

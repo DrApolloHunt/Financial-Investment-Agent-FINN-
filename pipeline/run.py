@@ -191,6 +191,10 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
         rank = {"results": 0, "person": 1, "filing": 2}.get(kind, 9)
         return (rank, -(dt.datetime.fromisoformat(it["ts"]).timestamp() if it.get("ts") else 0))
 
+    def patched(card):
+        """How much of a results card came from the exchange table rather than the filing."""
+        return 99 if card.get("source") == "table" or not card.get("ok") else len(card.get("filled_from_table") or [])
+
     def reread(it):
         c = it.get("card") or {}
         return (c.get("type") == "results" and (c.get("filled_from_table") or c.get("source") == "table" or not c.get("ok"))
@@ -241,7 +245,10 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
                     if prev:
                         log(f"  re-read {it['symbol']} results: filled from table {prev.get('filled_from_table') or prev.get('source')}"
                             f" -> {card.get('filled_from_table') or card.get('source') or 'none'}")
-                    it["card"] = {"type": "results", **card}
+                    if prev and patched(card) > patched(prev):
+                        pass                  # the earlier read needed less help from the exchange table: keep it
+                    else:
+                        it["card"] = {"type": "results", **card}
                 else:
                     it["subtype"], it["routine"] = "other", True
                 it["model"] = ext.get("_model")

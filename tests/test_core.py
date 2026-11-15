@@ -236,9 +236,9 @@ def test_tiers_and_reading_rules():
 def test_promise_check():
     card = {"ok": True, "lender": False, "ebitda_margin": 15.6, "rows": [
         {"key": "revenue", "yoy": {"pct": 11.3}}, {"key": "pat", "yoy": {"pct": 3.0}}]}
-    promises = [{"id": "a", "statement": "g", "metric": "revenue_growth", "basis": "fy", "target": {"low": 12, "high": 14}},
-                {"id": "b", "statement": "m", "metric": "ebitda_margin", "basis": "fy", "target": {"low": 17, "high": 17}},
-                {"id": "c", "statement": "cc", "metric": "revenue_growth", "basis": "constant_currency", "target": {"low": 1, "high": 3}}]
+    promises = [{"id": "a", "statement": "Revenue growth of 12% to 14%", "metric": "revenue_growth", "basis": "fy", "target": {"low": 12, "high": 14}},
+                {"id": "b", "statement": "EBITDA margin of 17%", "metric": "ebitda_margin", "basis": "fy", "target": {"low": 17, "high": 17}},
+                {"id": "c", "statement": "Revenue growth of 1-3% in constant currency", "metric": "revenue_growth", "basis": "constant_currency", "target": {"low": 1, "high": 3}}]
     out = {x["promise_id"]: x for x in triage.promise_check(card, promises)}
     assert out["a"]["verdict"] == "below" and out["b"]["verdict"] == "below" and "c" not in out
 
@@ -455,3 +455,36 @@ def test_web_bio_without_sources_is_not_cached(monkeypatch, tmp_path):
     assert readers.web_bio("E Five", "CFO", "Co") is None
     assert "without search sources" in readers.web_bio_error()
     assert readers.web_bio("E Five", "CFO", "Co")["sources"]       # asked again, not served from cache
+
+
+def test_promise_check_only_compares_company_wide_percentages():
+    from finn import triage
+    card = {"ok": True, "lender": False, "ebitda_margin": 13.2, "rows": [
+        {"key": "revenue", "value": 952.5, "yoy": {"pct": 4.4}}, {"key": "pat", "value": 45.4, "yoy": {"pct": -61.6}}]}
+    ps = [
+        {"id": "a", "metric": "revenue_growth", "statement": "Achieve PCB revenue of around INR 300 crores to INR 400 crores in FY27.",
+         "target": {"low": 3e9, "high": 4e9, "unit": "INR"}},
+        {"id": "b", "metric": "revenue_growth", "statement": "Grow railway business by around 20% to 25% this year.",
+         "target": {"low": 20, "high": 25, "unit": "%"}},
+        {"id": "c", "metric": "revenue_growth", "statement": "We expect revenue growth of 25% to 30% in FY27.",
+         "target": {"low": 25, "high": 30, "unit": "%"}},
+        {"id": "d", "metric": "ebitda_margin", "statement": "EBITDA margin to stay above 12%.", "target": {"low": 12, "unit": "%"}},
+        {"id": "e", "metric": "revenue_growth", "statement": "Overall revenue to grow 20%.", "target": {"low": 20, "unit": "%"}},
+        {"id": "f", "metric": "revenue_growth", "statement": "Expect 20% to 24% AUM growth in FY27.", "target": {"low": 20, "high": 24, "unit": "%"}},
+        {"id": "g", "metric": "ebitda_margin", "statement": "Operating margin guidance for FY27 is 20% to 22%.", "target": {"low": 20, "high": 22, "unit": "%"}},
+        {"id": "h", "metric": "revenue_growth", "statement": "The mega deal will contribute over 1% revenue growth.", "target": {"low": 1, "unit": "%"}},
+        {"id": "i", "metric": "ebitda_margin", "statement": "PP&M margin to be stable at 7.8%.", "target": {"low": 7.8, "unit": "%"}},
+        {"id": "j", "metric": "revenue_growth", "statement": "Revenue growth to stabilise around 14% to 15%.",
+         "target": {"low": 8, "high": 10, "unit": "%"}, "original_target": {"low": 14, "high": 15, "unit": "%"}, "revised": "worse"},
+    ]
+    checks = {c["promise_id"]: c for c in triage.promise_check(card, ps)}
+    assert {k: c["verdict"] for k, c in checks.items()} == {"c": "below", "d": "above", "e": "below", "j": "below"}
+    assert checks["j"]["was"] == {"low": 14, "high": 15} and checks["c"]["was"] is None
+
+
+def test_results_note_drops_unit_talk_only():
+    from finn.financials import _useful_note
+    assert _useful_note("Figures are presented in lakhs as per standard filings.") == ""
+    assert _useful_note("Amounts in Rs. crores unless stated otherwise") == ""
+    keep = "Includes fair value change of put option liability over NCI of 671 crores for the quarter."
+    assert _useful_note(keep) == keep

@@ -224,6 +224,8 @@ def _call(task: str, parts: list[dict], schema: Optional[dict], json_mode: bool,
                 continue
             errors.append(f"{model}: {r.status_code} {err.get('message', '')[:160]}")
             break
+        else:
+            errors.append(f"{model}: gave up after 3 attempts")   # e.g. repeated short rate limits
     raise GeminiError("; ".join(errors) or f"all models for '{task}' unavailable")
 
 

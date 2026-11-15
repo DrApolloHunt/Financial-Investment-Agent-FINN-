@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from .periods import prev_quarter, qkey, year_ago
@@ -64,6 +65,15 @@ def headline_numbers(period: dict, factor: float, lender: bool) -> dict:
     return {"revenue": scale(rev), "ebitda": scale(ebitda), "pbt": scale(pbt), "pat": scale(pat)}
 
 
+_UNIT_TALK = re.compile(r"\b(figures|amounts?|numbers|values|presented|stated|expressed|reported)\b[^.]{0,25}"
+                        r"\bin (rs\.? |inr |rupees )?(lakhs?|crores?|millions?|thousands?)\b", re.I)
+
+
+def _useful_note(note: str) -> str:
+    """The reader's note, minus talk about units: the card already states its unit, in crore."""
+    return "" if _UNIT_TALK.search(note) else note
+
+
 def results_card(extracted: dict) -> dict:
     """Turn a model's line-item extraction of a results filing into the card."""
     unit = str(extracted.get("unit") or "crore").lower().strip()
@@ -91,7 +101,7 @@ def results_card(extracted: dict) -> dict:
         "ebitda_margin": margin,
         "ebitda_note": ("Pre-provision operating profit shown for lenders; EBITDA is not meaningful for banks/NBFCs."
                         if lender else "EBITDA = revenue − total expenses + finance costs + depreciation (excludes other income)."),
-        "note": extracted.get("notes") or "",
+        "note": _useful_note(extracted.get("notes") or ""),
     }
 
 
