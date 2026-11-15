@@ -234,25 +234,40 @@ experience, and qualifications. Only describe this specific person at this compa
 clearly refer to this person, reply with exactly UNKNOWN. Plain text, no preamble, no markdown."""
 
 
+_WEB_BIO_ERR = [""]
+
+
+def web_bio_error() -> str:
+    """Why the last web_bio call returned None."""
+    return _WEB_BIO_ERR[0] or "none"
+
+
 def web_bio(name: str, role: str, company: str, action: str = "appointed", effective: str = "") -> Optional[dict]:
     """Best-effort background from a grounded web search, for people whose filing carries no profile.
     Returns {"text", "sources", "model"} or None. Never raises."""
     key = cache.key_for("web_bio", f"{company}|{name}|{role}", V_WEB_BIO)
     hit = cache.get(key)
     if hit is not None:
+        _WEB_BIO_ERR[0] = "cached: no confident match earlier"
         return hit or None
     prompt = WEB_BIO_PROMPT.format(name=name, role=role, company=company, action=action,
                                    when=f", effective {effective}" if effective else "")
     try:
         text, model, sources = gemini.search_text("web_bio", prompt)
     except gemini.NoKey:
+        _WEB_BIO_ERR[0] = "no API key"
         return None
-    except gemini.GeminiError:
+    except gemini.GeminiError as e:
+        _WEB_BIO_ERR[0] = f"search call failed: {str(e)[:200]}"
         return None  # not cached: grounding may be available on a later run
     text = re.sub(r"\[\d+(?:,\s*\d+)*\]", "", text).strip().strip('"')
     text = re.sub(r"\s+([.,;:])", r"\1", text)
     words = text.split()
-    if "UNKNOWN" in text.upper()[:20] or len(words) < 6 or not sources:
+    if not sources:
+        _WEB_BIO_ERR[0] = "the answer came back without search sources"
+        return None  # not cached: the search may simply not have run this time
+    if "UNKNOWN" in text.upper()[:20] or len(words) < 6:
+        _WEB_BIO_ERR[0] = "model was not confident it was the same person"
         cache.put(key, {})
         return None
     if len(words) > 60:

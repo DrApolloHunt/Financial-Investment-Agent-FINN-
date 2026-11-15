@@ -381,6 +381,11 @@ def finalize(state: dict, quarters: dict, latest: Optional[str], use_model: bool
         blob = json.dumps(compact, ensure_ascii=False)
         key = cache.key_for("verdict", hashlib.sha1((blob + context).encode()).hexdigest(), V_VERDICT)
         hit = cache.get(key)
+        preferred = gemini.route("verdict")[0]
+        if hit and hit.get("model") != preferred and preferred not in gemini._exhausted:
+            hit_fallback, hit = hit, None   # an earlier run fell back to a weaker model; try the preferred one
+        else:
+            hit_fallback = None
         if hit is None:
             try:
                 prompt = VERDICT_PROMPT.format(name=state["name"], ledger=blob or "[]", context=context or "(none)")
@@ -388,7 +393,7 @@ def finalize(state: dict, quarters: dict, latest: Optional[str], use_model: bool
                 hit = {"data": data, "model": model}
                 cache.put(key, hit)
             except gemini.GeminiError:
-                hit = None
+                hit = hit_fallback
         if hit:
             data, model = hit["data"], hit.get("model")
             lines = {d["id"]: d["line"] for d in data.get("lines", [])}

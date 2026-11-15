@@ -409,3 +409,49 @@ def test_web_bio_rejects_unsure_or_unsourced_answers(monkeypatch, tmp_path):
         raise gemini.GeminiError("grounding not available on this tier")
     monkeypatch.setattr(gemini, "search_text", boom)
     assert readers.web_bio("D Four", "CFO", "Co") is None
+
+
+def test_verdict_retries_preferred_model_after_a_fallback(monkeypatch, tmp_path):
+    from finn import gemini, ledger
+    monkeypatch.setenv("FINN_CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(gemini, "_exhausted", set())
+    preferred, weaker = gemini.route("verdict")[0], gemini.route("verdict")[-1]
+    calls = []
+
+    def answer(model):
+        def fake(task, parts, schema=None, **kw):
+            calls.append(model)
+            return {"lines": [], "overrides": [], "credibility": "", "bull": [f"bull by {model}"], "bear": ["bear"]}, model
+        return fake
+    state, q = ledger.new_state("XCO", "X Co"), {"periods": [], "rows": {}}
+    ctx = "Revenue compounded 12% a year over five years."
+    monkeypatch.setattr(gemini, "generate_json", answer(weaker))
+    first = ledger.finalize(state, q, None, context=ctx)
+    assert first["verdict_model"] == weaker and first["credibility"] is None and first["bull"]   # no promises: figures only
+    monkeypatch.setattr(gemini, "generate_json", answer(preferred))
+    assert ledger.finalize(state, q, None, context=ctx)["verdict_model"] == preferred           # retried
+    ledger.finalize(state, q, None, context=ctx)
+    assert calls == [weaker, preferred]                                                          # then cached
+
+    def boom(*a, **k):
+        raise gemini.GeminiError("down")
+    other = "Revenue fell 3% a year over five years."
+    monkeypatch.setattr(gemini, "generate_json", answer(weaker))
+    ledger.finalize(state, q, None, context=other)
+    monkeypatch.setattr(gemini, "generate_json", boom)
+    assert ledger.finalize(state, q, None, context=other)["verdict_model"] == weaker            # keeps the old one
+    gemini._exhausted.add(preferred)
+    monkeypatch.setattr(gemini, "generate_json", answer(preferred))
+    ledger.finalize(state, q, None, context=other)
+    assert calls[-1] == weaker                                                                   # preferred spent: no retry
+
+
+def test_web_bio_without_sources_is_not_cached(monkeypatch, tmp_path):
+    from finn import gemini, readers
+    monkeypatch.setenv("FINN_CACHE_DIR", str(tmp_path))
+    answers = iter([("A long answer about this person's career at several firms.", "m", []),
+                    ("Twenty years at a large bank, latterly its chief financial officer.", "m", [{"title": "a.in", "url": "https://a.in"}])])
+    monkeypatch.setattr(gemini, "search_text", lambda task, prompt, **kw: next(answers))
+    assert readers.web_bio("E Five", "CFO", "Co") is None
+    assert "without search sources" in readers.web_bio_error()
+    assert readers.web_bio("E Five", "CFO", "Co")["sources"]       # asked again, not served from cache

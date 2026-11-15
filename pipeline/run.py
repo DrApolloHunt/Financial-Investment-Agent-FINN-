@@ -127,6 +127,12 @@ def build_company(sym: str, sector: str, use_ai: bool, n_calls: int, status: dic
         co["ledger"] = ledger.finalize(state, co["quarters"], latest, use_model=True,
                                        context=ledger.context_for(co))
         log(f"  {sym} verdicts: {co['ledger'].get('verdict_model') or 'rules only'} ({time.time()-t0:.0f}s)")
+    elif use_ai and (co.get("fundamentals", {}).get("trajectory") or co.get("business")):
+        # no earnings calls to hold management to, but the figures still support a bull and bear case
+        t0 = time.time()
+        co["ledger"] = ledger.finalize(state, co["quarters"], latest, use_model=True,
+                                       context=ledger.context_for(co))
+        log(f"  {sym} bull/bear from figures only: {co['ledger'].get('verdict_model') or 'none'} ({time.time()-t0:.0f}s)")
     elif old.get("ledger"):
         co["ledger"] = old["ledger"]
     else:
@@ -185,10 +191,34 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
         rank = {"results": 0, "person": 1, "filing": 2}.get(kind, 9)
         return (rank, -(dt.datetime.fromisoformat(it["ts"]).timestamp() if it.get("ts") else 0))
 
-    todo = [it for it in items if triage.needs_reading(it) and not it.get("read") and it.get("attempts", 0) < 2]
+    def reread(it):
+        c = it.get("card") or {}
+        return (c.get("type") == "results" and (c.get("filled_from_table") or c.get("source") == "table" or not c.get("ok"))
+                and it.get("results_v") != readers.V_RESULTS)
+
+    todo = [it for it in items if triage.needs_reading(it) and (not it.get("read") or reread(it))
+            and it.get("attempts", 0) < 2]
     todo.sort(key=prio)
     used = 0
     web_bios = [0]
+
+    def lookup(c, company):
+        """Web background for an appointee whose filing has no profile. Small, capped, never fatal."""
+        if (c.get("action") not in ("appointed", "redesignated") or (c.get("background") or "").strip()
+                or c.get("web_background") or not c.get("name") or web_bios[0] >= WEB_BIO_CAP):
+            return
+        web_bios[0] += 1
+        wb = readers.web_bio(c["name"], c.get("role", ""), company, c.get("action", "appointed"), c.get("effective") or "")
+        if wb:
+            c["web_background"] = wb
+        log(f"  web background {c['name']} ({company}): {'found, ' + str(len(wb['sources'])) + ' sources' if wb else readers.web_bio_error()}")
+
+    # people cards read on earlier runs, before web backgrounds existed
+    if use_ai:
+        for it in items:
+            if (it.get("card") or {}).get("type") == "people":
+                for c in it["card"].get("changes", []):
+                    lookup(c, it["name"])
     for it in todo:
         if not use_ai or used >= budget or not time_left():
             break
@@ -198,12 +228,19 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
         open_p = [p for p in (co.get("ledger") or {}).get("promises", []) if p.get("status") not in ("kept", "missed")]
         try:
             if kind == "results":
+                prev = it.get("card") if (it.get("card") or {}).get("type") == "results" else None
                 ext = readers.read_results(it["attachment"])
-                if ext.get("is_results_document"):
+                it["results_v"] = readers.V_RESULTS
+                if prev and not ext.get("is_results_document"):
+                    pass                      # a re-read that fails keeps the card already checked
+                elif ext.get("is_results_document"):
                     card = results_card(ext)
                     card["cross_check"] = cross_check(card, co.get("quarters") or {})
                     card = complete_from_table(card, co.get("quarters") or {}, bool(co.get("is_lender")))
                     card["promise_check"] = triage.promise_check(card, open_p)
+                    if prev:
+                        log(f"  re-read {it['symbol']} results: filled from table {prev.get('filled_from_table') or prev.get('source')}"
+                            f" -> {card.get('filled_from_table') or card.get('source') or 'none'}")
                     it["card"] = {"type": "results", **card}
                 else:
                     it["subtype"], it["routine"] = "other", True
@@ -212,13 +249,7 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
                 ppl = readers.read_person(it["attachment"])
                 changes = ppl.get("changes", [])
                 for c in changes:
-                    if (c.get("action") in ("appointed", "redesignated") and not (c.get("background") or "").strip()
-                            and web_bios[0] < WEB_BIO_CAP and time_left()):
-                        web_bios[0] += 1
-                        wb = readers.web_bio(c.get("name", ""), c.get("role", ""), it["name"],
-                                             c.get("action", "appointed"), c.get("effective") or "")
-                        if wb:
-                            c["web_background"] = wb
+                    lookup(c, it["name"])
                 it["card"] = {"type": "people", "changes": changes}
                 if ppl.get("changes") and all(c.get("level") != "top" for c in ppl["changes"]):
                     it["subtype"], it["routine"] = "board", True
@@ -240,21 +271,8 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
             it["attempts"] = it.get("attempts", 0) + 1
             used += 1
     log(f"read {used} filings with the model (budget {budget}); {max(0, len(todo) - used)} left for next run")
+    log(f"web backgrounds looked up: {web_bios[0]}")
 
-    # Backfill: people cards read on earlier runs, before web backgrounds existed.
-    if use_ai:
-        for it in items:
-            for c in (it.get("card") or {}).get("changes", []) if (it.get("card") or {}).get("type") == "people" else []:
-                if web_bios[0] >= WEB_BIO_CAP or not time_left():
-                    break
-                if (c.get("action") in ("appointed", "redesignated") and not (c.get("background") or "").strip()
-                        and "web_background" not in c and c.get("name")):
-                    web_bios[0] += 1
-                    wb = readers.web_bio(c["name"], c.get("role", ""), it["name"], c.get("action", "appointed"),
-                                         c.get("effective") or "")
-                    if wb:
-                        c["web_background"] = wb
-        log(f"web backgrounds looked up: {web_bios[0]}")
 
     for it in items:
         it["tier"] = triage.tier(it)
