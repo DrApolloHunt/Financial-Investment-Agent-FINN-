@@ -31,17 +31,7 @@ export const link = (u) => (/^https?:\/\//i.test(String(u || "")) ? String(u) : 
 export const pct = (v, digits = 1) => (v == null ? "—" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(digits)}%`);
 export const sign = (v) => (v == null ? "flat" : v > 0.05 ? "pos" : v < -0.05 ? "neg" : "flat");
 
-export function target(t) {
-  if (!t) return "";
-  const u = t.unit || "";
-  const f = (x) => (Math.abs(x) >= 1000 ? nf0.format(x) : String(+x.toFixed(2)));
-  const pre = u === "crore" ? "₹" : "";
-  const post = u === "crore" ? " cr" : u === "%" ? "%" : u ? ` ${u}` : "";
-  const lo = t.low, hi = t.high;
-  if (lo == null && hi == null) return "";
-  if (lo != null && hi != null && lo !== hi) return `${pre}${f(lo)}–${f(hi)}${post}`;
-  return `${pre}${f(lo ?? hi)}${post}`;
-}
+export { target } from "./logic.js";
 
 // ---- time ---------------------------------------------------------------------
 // In demo-snapshot mode the app's "now" is the moment the snapshot was taken.
@@ -215,6 +205,9 @@ const ICONS = {
   down: '<path d="M6 9l6 6 6-6"/>',
   sliders: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
   ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/>',
+  share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>',
+  play: '<path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/>',
+  stop: '<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/>',
 };
 export const icon = (name, cls = "") => raw(`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ""}</svg>`);
 

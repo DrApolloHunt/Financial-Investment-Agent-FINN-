@@ -1,6 +1,6 @@
 import * as data from "../data.js";
 import { LABELS } from "../categories.js";
-import { buriedKinds, explaining, group, istDate, tier, unusual, windowRange } from "../logic.js";
+import { briefScript, buriedKinds, explaining, group, istDate, tier, unusual, windowRange } from "../logic.js";
 import { ago, avatar, html, icon, link, logo, mark, mount, moveBadge, nowMs, num, pct, sign, stampOf, tag, target, today, when } from "../ui.js";
 
 const WINDOWS = [["24h", "24 hours"], ["3d", "3 days"], ["7d", "7 days"], ["since", "Since last visit"], ["custom", "Dates"]];
@@ -45,6 +45,15 @@ export async function todayView(el, ctx, _a, alive) {
   const hero = n === 0 ? "Nothing needs you." : n === 1 ? "1 thing matters." : `${n} things matter.`;
   const stale = !ctx.snapshot && meta?.generated_at && now - new Date(meta.generated_at) > 30 * 3600e3;
 
+  const brief = briefScript({
+    window: s.window, companies: port.companies.length, buried: buried.length,
+    promise: promise.map((it) => ({ ...it, key: it.id })),
+    moves: [...unexplained.map(({ c, m }) => ({ key: moveKey(c, m), name: c.name, chg: m.chg, vx: m.vx })),
+            ...movedWith.map(({ c, m, f }) => ({ key: moveKey(c, m), name: c.name, chg: m.chg, vx: m.vx, filing: f.summary || f.headline }))],
+    material: material.map((it) => ({ ...it, key: it.id })),
+  });
+  const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+
   const tiles = [
     ["promise", "t-promise", "flag", promise.length, "Promises"],
     ["move", "t-move", "pulse", unexplained.length + movedWith.length, "Price moves"],
@@ -59,6 +68,12 @@ export async function todayView(el, ctx, _a, alive) {
       <h1 class="hero">${hero} <span class="quiet">${buried.length} buried.</span></h1>
       ${s.window === "since" && !ctx.session.start ? html`<p class="sub">First visit: showing the last 24 hours.</p>` : ""}
       ${meta?.generated_at && !ctx.snapshot ? html`<p class="sub">Data updated ${ago(meta.generated_at)}.</p>` : ""}
+      ${canSpeak ? html`<div class="brief-row">
+        <button type="button" class="brief" data-brief aria-pressed="false">${icon("play", "on-play")}${icon("stop", "on-stop")}<span>Brief me</span></button>
+        <span class="brief-len">About ${Math.max(10, Math.round(brief.reduce((n, x) => n + x.say.split(" ").length, 0) / 2.6 / 5) * 5)} seconds, read aloud</span>
+      </div>
+      <div class="nowplaying" hidden><p class="caption" aria-live="polite"></p>
+        <button type="button" class="np-stop" data-brief-stop aria-label="Stop the brief">${icon("stop")}</button></div>` : ""}
     </section>
     <div class="chips" role="group" aria-label="Time window">
       ${WINDOWS.map(([k, label]) => html`<button type="button" data-win="${k}" aria-pressed="${s.window === k}">${k === "custom" ? icon("calendar") : ""}${label}</button>`)}
@@ -107,6 +122,12 @@ export async function todayView(el, ctx, _a, alive) {
     </section>` : ""}
   `);
 
+  el.querySelector("[data-brief]")?.addEventListener("click", (e) => speak(e.currentTarget, brief, el));
+  el.querySelector("[data-brief-stop]")?.addEventListener("click", () => {
+    const b = el.querySelector("[data-brief]");
+    if (b?.getAttribute("aria-pressed") === "true") b.click();
+  });
+
   el.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => {
     const target = el.querySelector(`#go-${b.dataset.go}`);
     if (b.dataset.go === "buried") {
@@ -133,6 +154,53 @@ export async function todayView(el, ctx, _a, alive) {
 }
 
 const dayLabel = (d) => when(`${d}T15:30:00+05:30`);
+const moveKey = (c, m) => `move-${c.symbol}-${m.d}`;
+
+/**
+ * Reads the brief aloud with the phone's own voice, one card at a time: the card being
+ * read is outlined and scrolled into view, and a caption shows the words for when the
+ * sound is off. A second tap stops it, and so does leaving the screen.
+ */
+function speak(btn, segs, root) {
+  const synth = window.speechSynthesis;
+  const bar = root.querySelector(".nowplaying");
+  const caption = root.querySelector(".caption");
+  const label = btn.querySelector("span");
+  const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const clear = () => root.querySelectorAll(".speaking").forEach((c) => c.classList.remove("speaking"));
+  const done = () => {
+    clear();
+    btn.setAttribute("aria-pressed", "false");
+    label.textContent = "Brief me";
+    if (bar) bar.hidden = true;
+  };
+  if (btn.getAttribute("aria-pressed") === "true") { synth.cancel(); done(); return; }
+
+  const voices = synth.getVoices();
+  const voice = voices.find((v) => /^en[-_]IN/i.test(v.lang)) || voices.find((v) => /^en[-_]GB/i.test(v.lang))
+    || voices.find((v) => /^en/i.test(v.lang));
+  synth.cancel();
+  btn.setAttribute("aria-pressed", "true");
+  label.textContent = "Stop";
+  segs.forEach((seg, i) => {
+    const u = new SpeechSynthesisUtterance(seg.say);
+    if (voice) u.voice = voice;
+    u.lang = voice?.lang || "en-IN";
+    u.rate = 1.03;
+    u.onstart = () => {
+      clear();
+      if (bar) { bar.hidden = false; caption.textContent = seg.say; }
+      const card = seg.key && root.querySelector(`[data-say="${CSS.escape(seg.key)}"]`);
+      if (card) {
+        card.classList.add("speaking");
+        card.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "center" });
+      }
+    };
+    if (i === segs.length - 1) { u.onend = done; u.onerror = done; }
+    synth.speak(u);
+  });
+  window.addEventListener("hashchange", () => { synth.cancel(); }, { once: true });
+}
 
 function topbar(port) {
   const n = port?.companies?.length || 0;
@@ -165,7 +233,7 @@ function actions(it, extra = []) {
 }
 
 function moveCard(c, m, f) {
-  return html`<article class="card">
+  return html`<article class="card" data-say="${moveKey(c, m)}">
     <div class="card-h">${avatar(c.symbol, c.name)}<div class="id"><b>${c.symbol}</b><span>${c.name}</span></div><time>${dayLabel(m.d)}</time></div>
     <div class="tag-row">${f ? tag("on_track", "Filing found") : tag("slipping", "No filing explains it")}<span class="mv">${moveBadge(m.chg)}<span class="badge-note">${m.vx.toFixed(1)}× volume</span></span></div>
     <h3 class="card-t">${m.chg >= 0 ? "Up" : "Down"} ${Math.abs(m.chg).toFixed(1)}% on ${m.vx.toFixed(1)}× its usual volume</h3>
@@ -188,7 +256,7 @@ function promiseCard(it) {
   }
   const related = (it.related || []).filter((r) => r.attachment).map((r) =>
     html`<a href="${link(r.attachment)}" target="_blank" rel="noopener">${r.subtype === "deck" ? "investor deck" : r.subtype === "ad" ? "newspaper ad" : "press release"}</a>`);
-  return html`<article class="card">
+  return html`<article class="card" data-say="${it.id}">
     ${cardHead(it)}
     ${tags(it, t)}
     <h3 class="card-t">${card ? `${card.quarter || "Quarterly"} results` : it.summary || it.headline}</h3>
@@ -243,14 +311,14 @@ function materialCard(it) {
       .sort((a, b) => rank(a) - rank(b));
     const role = uniq.find((c) => c.level === "top")?.role || "Management";
     const short = role.replace(/Chief Financial Officer/i, "CFO").replace(/Chief Executive Officer/i, "CEO").replace(/Managing Director/i, "MD");
-    return html`<article class="card">
+    return html`<article class="card" data-say="${it.id}">
       ${cardHead(it)}
       ${tags(it, html`<span class="tag">Management change</span>`)}
       <h3 class="card-t">${short} change</h3>
       <div style="margin-top:12px">${uniq.map(personLine)}</div>
       ${actions(it)}</article>`;
   }
-  return html`<article class="card">
+  return html`<article class="card" data-say="${it.id}">
     ${cardHead(it)}
     ${tags(it, html`<span class="tag">${LABELS[it.category] || "Filing"}</span>`)}
     <h3 class="card-t">${it.summary || it.headline}</h3>

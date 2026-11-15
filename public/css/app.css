@@ -132,6 +132,24 @@ main:focus { outline: none; }
 .pagehead { padding: 18px 2px 4px; }
 .pagehead .title { font-size: 26px; letter-spacing: -0.02em; }
 
+/* "Brief me": the app reads the few things that matter aloud, card by card */
+.brief-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.brief { display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: pointer; padding: 10px 16px 10px 12px; border-radius: 999px;
+  background: var(--brand); color: var(--on-brand); font: 700 var(--s0)/1 var(--display); box-shadow: 0 4px 14px color-mix(in srgb, var(--brand) 35%, transparent); }
+.brief svg { width: 18px; height: 18px; }
+.brief .on-stop, .brief[aria-pressed="true"] .on-play { display: none; }
+.brief[aria-pressed="true"] .on-stop { display: block; }
+.brief-len { font-size: var(--s-1); color: var(--ink-3); }
+.nowplaying { position: fixed; z-index: 6; left: 12px; right: 12px; bottom: calc(var(--nav-h) + 10px + env(safe-area-inset-bottom));
+  max-width: 536px; margin: 0 auto; display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border-radius: 16px;
+  background: var(--ink); color: var(--card); box-shadow: 0 8px 24px rgba(27, 28, 38, .25); }
+.nowplaying[hidden] { display: none; }
+.caption { margin: 0; flex: 1; font-size: var(--s-1); line-height: 1.45; max-height: 4.4em; overflow: hidden; }
+.np-stop { flex: none; width: 38px; height: 38px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
+  background: var(--brand); color: var(--on-brand); }
+.np-stop svg { width: 16px; height: 16px; }
+.card.speaking { box-shadow: 0 0 0 2.5px var(--brand), var(--shadow); }
+
 /* ---- chips (window picker, filters, jump links) ------------------------------------ */
 .chips { display: flex; gap: 8px; overflow-x: auto; margin: 14px -16px 0; padding: 2px 16px 4px; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
@@ -343,6 +361,20 @@ main:focus { outline: none; }
 .bb h3 svg { width: 22px; height: 22px; padding: 4px; border-radius: 8px; background: var(--c); fill: none; stroke: var(--card); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .bb ul { margin: 0; padding-left: 18px; font-size: var(--s0); line-height: 1.5; }
 .bb li { margin: 6px 0; }
+
+/* questions for the next call: a numbered list, because order is priority */
+.asks { list-style: none; counter-reset: ask; margin: 6px 0 0; padding: 0; }
+.asks li { counter-increment: ask; position: relative; padding: 14px 0 14px 40px; border-top: 1px solid var(--line); }
+.asks li:first-child { border-top: 0; padding-top: 6px; }
+.asks li::before { content: counter(ask); position: absolute; left: 0; top: 14px; width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; font: 700 13px/1 var(--display); background: var(--brand-wash); color: var(--brand-ink); }
+.asks li:first-child::before { top: 6px; }
+.asks li.ask-contradiction::before, .asks li.ask-missed::before { background: color-mix(in srgb, var(--miss) 14%, var(--card)); color: var(--miss); }
+.asks li.ask-cut::before, .asks li.ask-behind::before { background: color-mix(in srgb, var(--slip) 16%, var(--card)); color: var(--slip); }
+.ask-q { margin: 0; font: 700 var(--s1)/1.4 var(--display); letter-spacing: -0.005em; }
+.ask-p { margin: 8px 0 0; padding: 10px 12px; background: var(--sunk); border-radius: var(--r-in); font-family: var(--serif); font-size: var(--s0); line-height: 1.5; }
+.ask-p cite { display: block; margin-top: 6px; font: 400 var(--s-1)/1.4 var(--sans); font-style: normal; color: var(--ink-3); }
+.ask-f { margin: 8px 0 0; font-size: var(--s-1); color: var(--ink-2); line-height: 1.5; }
 
 /* business */
 .said-block { font-family: var(--serif); font-size: var(--s1); line-height: 1.55; margin: 4px 0 12px; }

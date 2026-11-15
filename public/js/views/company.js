@@ -1,6 +1,6 @@
 import * as data from "../data.js";
 import { LABELS } from "../categories.js";
-import { tier } from "../logic.js";
+import { callQuestions, questionsText, tier } from "../logic.js";
 import {
   avatar, barChart, crore, day, html, icon, lineChart, mark, mount, moveBadge, num, rupees, sparkline,
   link, STATUS, STATUS_ORDER, tag, target, when, wireChart,
@@ -70,7 +70,9 @@ export function renderCompany(el, co, filings, ctx, { back, banner } = {}) {
   const T = F?.trajectory;
   const B = co.business && co.business.what_it_does ? co.business : null;
   const bull = L.bull || [], bear = L.bear || [];
-  const jumps = [["promises", "Promises"], bull.length || bear.length ? ["bullbear", "Bull vs bear"] : null,
+  const asks = callQuestions(L.promises, L.latest_quarter);
+  const jumps = [["promises", "Promises"], asks.length ? ["ask", "Ask on the call"] : null,
+    bull.length || bear.length ? ["bullbear", "Bull vs bear"] : null,
     B ? ["business", "Business"] : null, F || rev.length ? ["numbers", "Numbers"] : null,
     F?.balance?.period ? ["balance", "Balance sheet"] : null, F?.cash?.years ? ["cash", "Cash quality"] : null].filter(Boolean);
 
@@ -98,6 +100,17 @@ export function renderCompany(el, co, filings, ctx, { back, banner } = {}) {
           <p class="foot">Tap a promise for the quote, the call-by-call history and the filing that settled it.</p>`
         : html`<p class="note">${co.transcripts?.length ? "No forward-looking commitments were found in the calls read." : "No earnings-call transcripts are available for this company, so there is nothing to hold management to yet."}</p>`}
     </section>
+
+    ${asks.length ? html`<section class="card sec-card" id="sec-ask">
+      <h2>Ask on the next call <span class="n">${asks.length}</span></h2>
+      <p class="lede">What to put to management, from what they promised and what happened since. Most pressing first.</p>
+      <ol class="asks">${asks.map((q) => html`<li class="ask-${q.kind}">
+        <p class="ask-q">${q.ask}</p>
+        <blockquote class="ask-p">${q.statement}<cite>Promised on the ${q.made_in} call${q.source_url ? html`, <a href="${link(q.source_url)}" target="_blank" rel="noopener">transcript</a>` : ""}</cite></blockquote>
+        ${q.facts.length ? html`<p class="ask-f">${q.facts.join(". ")}.</p>` : ""}
+      </li>`)}</ol>
+      <div class="card-f"><button type="button" class="pill primary" data-share-q>${icon("share")}<span>${"share" in navigator ? "Share questions" : "Copy questions"}</span></button></div>
+    </section>` : ""}
 
     ${bull.length || bear.length ? html`<section class="card sec-card" id="sec-bullbear"><h2>Bull vs bear</h2>
       <div class="bb">
@@ -212,6 +225,31 @@ export function renderCompany(el, co, filings, ctx, { back, banner } = {}) {
   el.querySelectorAll("[data-jump]").forEach((b) => b.addEventListener("click", () => {
     el.querySelector(`#sec-${b.dataset.jump}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }));
+  el.querySelector("[data-share-q]")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget, label = btn.querySelector("span");
+    const text = questionsText(co.name, asks);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `Questions for ${co.name}`, text });
+        return;
+      }
+    } catch (err) {
+      if (err?.name === "AbortError") return;   // the investor closed the share sheet
+    }
+    const ok = await copyText(text);
+    label.textContent = ok ? "Copied" : "Copy failed";
+    setTimeout(() => { label.textContent = "Copy questions"; }, 2000);
+  });
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+  const ta = Object.assign(document.createElement("textarea"), { value: text });
+  ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.append(ta); ta.select();
+  const ok = document.execCommand?.("copy") ?? false;
+  ta.remove();
+  return ok;
 }
 
 function stat(label, value) {

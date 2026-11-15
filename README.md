@@ -27,16 +27,20 @@ actually reported. That ledger is how FINN decides what matters:
   or volume moves beyond your thresholds are paired with the filings that explain them,
   and a move with no filing behind it is shown on its own. The window is the last 24
   hours, 3 or 7 days, since your last visit, or any dates you pick. Management changes
-  carry the appointee's background from the filing; when the filing has none, FINN
-  looks it up on the web and labels it as such, with its sources.
+  carry the appointee's background from the filing. **Brief me** reads the few things
+  that matter aloud, in the phone's own voice, outlining each card as it goes, for an
+  investor between meetings.
 - **Pull.** Type any NSE symbol. FINN reads the last five earnings-call transcripts,
   lists the promises, follows each one through later calls (repeated, raised, cut,
   delivered, or quietly dropped), and checks the numeric ones against exchange-reported
   results. It also reads the latest annual report for what the business does and how
   its revenue splits.
 
-Each company page then has, in order: the promise ledger and a credibility read; a
-bull case and a bear case argued only from that page's facts; the business snapshot;
+Each company page then has, in order: the promise ledger and a credibility read;
+**Ask on the next call**, the questions to put to management, most pressing first, each
+resting on a quoted promise and the reported figure (built in code from the ledger, and
+one tap to share or copy into call notes); a bull case and a bear case argued only from
+that page's facts; the business snapshot;
 ten years of revenue, profit and margins with key ratios; the balance sheet (debt,
 interest cover, working-capital days); and cash quality (operating cash against
 reported profit, year by year). The figures are computed in code from exchange-filed
@@ -51,11 +55,11 @@ The deployed app runs on **live data, refreshed automatically** by a free GitHub
 
 | When (IST) | What it refreshes |
 |---|---|
-| 1:00 pm, Monday to Friday | New exchange filings |
+| Every hour, 10 am to 3 pm, Monday to Friday | New exchange filings |
 | 7:10 pm, Monday to Friday | New filings and the day's closing prices |
 | 9:30 am, Saturday | Everything, including new earnings-call transcripts, annual reports and verdicts |
 
-Until the first scheduled refresh (Monday 16 Nov, 1:00 pm IST), it shows the snapshot it
+Until the first scheduled refresh (Monday 16 Nov, 10:00 am IST), it shows the snapshot it
 started from: real data as of 15 Nov 2026, 12:16 am IST. That snapshot holds:
 
 - **Promise ledgers** from the last five earnings calls of 18 NSE companies, plus 5 more prepared for research.

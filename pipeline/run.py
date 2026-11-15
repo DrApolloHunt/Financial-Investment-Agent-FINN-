@@ -50,8 +50,10 @@ def time_left() -> bool:
     return time.time() < DEADLINE
 
 
-# Web-searched backgrounds for appointees whose filing has no profile: a few per run.
+# Web-searched backgrounds for appointees whose filing has no profile: a few per full run.
+# Quick runs skip them: on the free tier each refused lookup costs about two minutes.
 WEB_BIO_CAP = int(os.environ.get("FINN_WEB_BIO_CAP", "8"))
+WEB_BIO_ON = [True]
 
 
 def load(path: Path, default):
@@ -208,7 +210,7 @@ def refresh_feed(companies: dict, days: int, use_ai: bool, budget: int, status: 
 
     def lookup(c, company):
         """Web background for an appointee whose filing has no profile. Small, capped, never fatal."""
-        if (c.get("action") not in ("appointed", "redesignated") or (c.get("background") or "").strip()
+        if (not WEB_BIO_ON[0] or c.get("action") not in ("appointed", "redesignated") or (c.get("background") or "").strip()
                 or c.get("web_background") or not c.get("name") or web_bios[0] >= WEB_BIO_CAP):
             return
         web_bios[0] += 1
@@ -369,6 +371,7 @@ def main(argv=None):
     t0 = time.time()
 
     companies: dict[str, dict] = {}
+    WEB_BIO_ON[0] = a.mode == "full"
     if a.mode == "full":
         for c in port:
             log(f"company {c['symbol']}")
