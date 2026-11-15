@@ -1,0 +1,24 @@
+name: smoke-live
+
+# Replays the Research flow against the deployed app for any symbol, with timings.
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: "NSE symbol to research"
+        default: "PIDILITIND"
+      base:
+        description: "Deployed app URL"
+        default: "https://financial-investment-agent-finn.vercel.app"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python dev/smoke_live.py "${{ github.event.inputs.base }}" "${{ github.event.inputs.symbol }}"
