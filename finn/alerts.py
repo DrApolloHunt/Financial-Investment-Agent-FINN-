@@ -151,10 +151,14 @@ def all_keys(items: list[dict], companies: dict, config: dict) -> set:
     return keys
 
 
-def publish(top: str, alert: dict) -> None:
+def publish(top: str, alert: dict) -> dict:
     body = {"topic": top, **{k: v for k, v in alert.items() if v}}
     r = requests.post(SERVER, json=body, timeout=15)
     r.raise_for_status()
+    try:
+        return r.json()
+    except ValueError:
+        return {"raw": r.text[:300]}
 
 
 def _paths(data_dir: Path) -> tuple[Path, Path]:
@@ -239,7 +243,8 @@ def main(argv=None) -> int:
                              f"filing arrives, or a price moves beyond ±{d.get('price_move_pct', 4):g}% or "
                              f"{d.get('volume_multiple', 2):g}× its usual volume. Tap to open FINN."),
                  "tags": ["bell"], "priority": 3, "click": f"{base}/#/" if base else ""}
-        publish(top, alert)
+        reply = publish(top, alert)
+        print("ntfy reply:", json.dumps(reply)[:300])
         sent_now = [alert]
         # and the newest real alert, so the format can be seen today (marked as an example)
         cands = (compose(feed["items"], companies, config, set(), now=dt.datetime.now(IST))
@@ -247,16 +252,17 @@ def main(argv=None) -> int:
         example = next((c for c in cands if "results" in c[1]["title"]), cands[0] if cands else None)
         if example:
             ex = {**example[1], "title": f"Example: {example[1]['title']}"}
-            publish(top, ex)
+            print("ntfy reply:", json.dumps(publish(top, ex))[:300])
             sent_now.insert(0, ex)
         pub_path, _ = _paths(data_dir)
         public = json.loads(pub_path.read_text(encoding="utf-8"))
         stamp = dt.datetime.now(IST).isoformat(timespec="seconds")
         public["log"] = ([{"at": stamp, **a} for a in sent_now] + public.get("log", []))[:20]
         pub_path.write_text(json.dumps(public, ensure_ascii=False), encoding="utf-8")
-        got = requests.get(f"{SERVER}/{top}/json", params={"poll": "1", "since": "10m"}, timeout=15)
-        n = sum(1 for line in got.text.splitlines() if '"event":"message"' in line)
-        print(f"test alert sent to {SERVER}/{top}; the topic now holds {n} message(s) from the last 10 minutes")
+        got = requests.get(f"{SERVER}/{top}/json", params={"poll": "1", "since": "1h"}, timeout=15)
+        print("poll:", got.status_code, got.text[:600].replace("\n", " | "))
+        n = sum(1 for line in got.text.splitlines() if '"message"' in line and '"event"' in line)
+        print(f"test alert sent to {SERVER}/{top}; the topic now holds {n} message(s) from the last hour")
         return 0
     print(__doc__)
     return 0
