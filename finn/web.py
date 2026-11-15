@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from . import business as biz
-from . import fundamentals, ledger
+from . import fundamentals, gemini, ledger
 from .sources import exchanges, prices, screener
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -125,7 +125,9 @@ ROUTES = {
 
 
 def run(fn, arg) -> tuple[int, dict]:
-    """Call an endpoint; turn failures into plain-language JSON errors."""
+    """Call an endpoint; turn failures into plain-language JSON errors.
+    A person is waiting, so the model client moves to its fallback at once (gemini.QUICK)."""
+    token = gemini.QUICK.set(True)
     try:
         return 200, fn(arg)
     except ApiError as e:
@@ -137,6 +139,8 @@ def run(fn, arg) -> tuple[int, dict]:
                "FetchError": f"A data source did not respond: {str(e)[:160]}",
                "GeminiError": f"The AI model is unavailable right now (free-tier limits?): {str(e)[:160]}"}.get(name, f"{name}: {str(e)[:160]}")
         return 502, {"error": msg}
+    finally:
+        gemini.QUICK.reset(token)
 
 
 # ---- WSGI app ----------------------------------------------------------------------

@@ -98,3 +98,35 @@ def test_high_demand_503_is_retried_on_same_model(monkeypatch):
     monkeypatch.setattr(gemini.requests, "post", lambda url, **kw: seq.pop(0))
     data, model = gemini.generate_json("read_pdf", [{"text": "x"}])
     assert data == {"e": 5} and model == gemini.ROUTES["read_pdf"][0]
+
+
+def test_quick_mode_skips_waits_and_moves_on(monkeypatch):
+    """With a person waiting (the web app), a rate-limited model is skipped at once."""
+    from finn import gemini
+    calls, slept = [], []
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    monkeypatch.setattr(gemini.time, "sleep", lambda s: slept.append(s))
+    monkeypatch.setattr(gemini, "_throttle", lambda m: None)
+    monkeypatch.setattr(gemini, "_exhausted", set())
+
+    class R:
+        def __init__(self, code, body):
+            self.status_code, self._b, self.text = code, body, ""
+
+        def json(self):
+            return self._b
+
+    def post(url, **kw):
+        model = url.split("/models/")[1].split(":")[0]
+        calls.append(model)
+        if model == gemini.route("verdict")[0]:
+            return R(429, {"error": {"message": "slow down", "details": [{"retryDelay": "20s"}]}})
+        return R(200, {"candidates": [{"content": {"parts": [{"text": '{"ok": true}'}]}}], "usageMetadata": {}})
+    monkeypatch.setattr(gemini.requests, "post", post)
+    token = gemini.QUICK.set(True)
+    try:
+        data, model = gemini.generate_json("verdict", [{"text": "x"}])
+    finally:
+        gemini.QUICK.reset(token)
+    assert data == {"ok": True} and model != gemini.route("verdict")[0]
+    assert calls[0] == gemini.route("verdict")[0] and calls.count(calls[0]) == 1 and not slept

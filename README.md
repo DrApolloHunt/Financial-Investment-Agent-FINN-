@@ -2,6 +2,16 @@
 
 **Live demo:** https://financial-investment-agent-finn.vercel.app (best on a phone)
 
+**Try it in two minutes, on a phone:**
+1. On **Today**, tap **Brief me** and listen: the few filings that matter, read aloud card by card.
+2. Under **Start here**, tap **Ask on the next call**: the questions to put to a company's management,
+   built from what it promised and what it reported.
+3. Open **Ledgers** → **Bharat Electronics**: every promise from five earnings calls, which were kept,
+   missed, cut or quietly dropped, and the bull and bear case argued from that page alone.
+4. Open **Research** and type any NSE symbol FINN has not seen (Pidilite is `PIDILITIND`): it reads
+   the company's last five earnings calls and annual report and builds the ledger live, in a minute or two.
+5. Tap the **bell** on Today to get phone alerts through the free ntfy app.
+
 <table>
   <tr>
     <td><img src="docs/today.png" width="200" alt="Today: the filings that matter as cards, the rest buried"></td>

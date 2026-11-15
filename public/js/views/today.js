@@ -52,6 +52,14 @@ export async function todayView(el, ctx, _a, alive) {
             ...movedWith.map(({ c, m, f }) => ({ key: moveKey(c, m), name: c.name, chg: m.chg, vx: m.vx, filing: f.summary || f.headline }))],
     material: material.map((it) => ({ ...it, key: it.id })),
   });
+  // first visit: four things worth trying, the questions on the company with the most broken promises
+  const worst = [...port.companies].sort((a, b) => trouble(b) - trouble(a))[0];
+  const tour = !tourDone() && worst ? [
+    ["brief", "play", "Hear the brief", "What matters, read aloud in seconds"],
+    [`#/c/${worst.symbol}`, "flag", "Ask on the next call", `Questions for ${worst.name.replace(/\s+(Ltd|Limited)\.?$/i, "")}, from its own promises`],
+    ["#/ledgers", "book", "Who keeps their word", `Every promise, ${port.companies.length} companies`],
+    ["#/settings/alerts", "bell", "Phone alerts", "A notification when it matters"],
+  ] : null;
   const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 
   const tiles = [
@@ -85,6 +93,13 @@ export async function todayView(el, ctx, _a, alive) {
 
     <div class="tiles">${tiles.map(([id, cls, ic, count, label]) => html`<button type="button" class="tile" data-go="${id}" ${count ? "" : "disabled"}>
       <span class="ti ${cls}">${icon(ic)}</span><b>${count}</b><span>${label}</span></button>`)}</div>
+
+    ${tour ? html`<section class="tour" aria-label="Start here">
+      <div class="tour-h"><h2>Start here</h2><button type="button" class="linkbtn" data-tour-hide>Hide</button></div>
+      <div class="tour-row">${tour.map(([to, ic, t, d]) => to === "brief"
+        ? (canSpeak ? html`<button type="button" class="tour-tile" data-tour-brief><span class="ti t-promise">${icon(ic)}</span><b>${t}</b><span>${d}</span></button>` : "")
+        : html`<a class="tour-tile" href="${to}" ${to.startsWith("#/c/") ? "data-jump-ask" : ""}><span class="ti ${ic === "bell" ? "t-know" : ic === "flag" ? "t-move" : "t-promise"}">${icon(ic)}</span><b>${t}</b><span>${d}</span></a>`)}</div>
+    </section>` : ""}
 
     ${ctx.snapshot ? html`<p class="banner">${icon("info")}<span>Demo snapshot: filings and prices as of ${stampOf(meta.as_of || meta.generated_at)}, so "the last 24 hours" means the 24 hours before it. Research works live on any company.</span></p>` : ""}
     ${data.FIXTURES ? html`<p class="banner">${icon("info")}<span>Sample data: these companies, filings and quotes are fictional.</span></p>` : ""}
@@ -123,6 +138,16 @@ export async function todayView(el, ctx, _a, alive) {
   `);
 
   el.querySelector("[data-brief]")?.addEventListener("click", (e) => speak(e.currentTarget, brief, el));
+  el.querySelector("[data-tour-brief]")?.addEventListener("click", () => {
+    const b = el.querySelector("[data-brief]");
+    b?.scrollIntoView({ block: "center" });
+    if (b?.getAttribute("aria-pressed") !== "true") b?.click();
+  });
+  el.querySelector("[data-jump-ask]")?.addEventListener("click", () => { ctx.jump = "ask"; });
+  el.querySelector("[data-tour-hide]")?.addEventListener("click", () => {
+    try { localStorage.setItem("finn.tour.done", "1"); } catch { /* private mode: hide for now */ }
+    el.querySelector(".tour")?.remove();
+  });
   el.querySelector("[data-brief-stop]")?.addEventListener("click", () => {
     const b = el.querySelector("[data-brief]");
     if (b?.getAttribute("aria-pressed") === "true") b.click();
@@ -155,6 +180,8 @@ export async function todayView(el, ctx, _a, alive) {
 
 const dayLabel = (d) => when(`${d}T15:30:00+05:30`);
 const moveKey = (c, m) => `move-${c.symbol}-${m.d}`;
+const trouble = (c) => (c.counts?.missed || 0) * 3 + (c.counts?.slipping || 0) * 2 + (c.counts?.dropped || 0);
+const tourDone = () => { try { return localStorage.getItem("finn.tour.done") === "1"; } catch { return false; } };
 
 /**
  * Reads the brief aloud with the phone's own voice, one card at a time: the card being

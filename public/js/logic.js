@@ -145,6 +145,8 @@ function plausible(x, unit) {
 // ---- "Before the call": questions to put to management, built from the ledger ---------------
 
 const PRIORITY = { contradiction: 0, missed: 1, cut: 2, behind: 3, dropped: 4, due: 5 };
+/** " by FY27", only when the horizon names a period. */
+const by = (h) => (/^(FY|CY|Q[1-4]|H[12]|\d{4})/i.test(String(h || "").trim()) ? ` by ${String(h).trim()}` : "");
 
 /** The call on which a promise was last spoken about. */
 function lastMentioned(p) {
@@ -193,7 +195,7 @@ export function callQuestions(promises, latestQuarter, max = 6) {
     } else if (p.status === "missed") {
       kind = "missed";
       ask = "This was missed. What went wrong, and what is the plan now?";
-      if (goal) facts.push(`Target: ${goal}${p.horizon ? ` by ${p.horizon}` : ""}`);
+      if (goal) facts.push(`Target: ${goal}${by(p.horizon)}`);
       if (got) facts.push(`Reported: ${got}`);
     } else if (p.status === "slipping" && p.revised === "worse") {
       kind = "cut";
@@ -205,7 +207,7 @@ export function callQuestions(promises, latestQuarter, max = 6) {
     } else if (p.status === "slipping") {
       kind = "behind";
       ask = "This is behind pace. What closes the gap?";
-      if (goal) facts.push(`Target: ${goal}${p.horizon ? ` by ${p.horizon}` : ""}`);
+      if (goal) facts.push(`Target: ${goal}${by(p.horizon)}`);
       if (got) facts.push(`Reported: ${got}`);
     } else if (p.status === "dropped") {
       kind = "dropped";

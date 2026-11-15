@@ -13,6 +13,7 @@ Override any route with env FINN_MODEL_<TASK>=model-a,model-b.
 from __future__ import annotations
 
 import base64
+import contextvars
 import json
 import os
 import re
@@ -146,6 +147,11 @@ def _retry_delay(err: dict) -> float:
     return 20.0
 
 
+# When a person is waiting on the screen, don't sit out rate limits or retries on one model:
+# move to the next in the route at once. The data job keeps the patient behaviour.
+QUICK: contextvars.ContextVar[bool] = contextvars.ContextVar("finn_quick", default=False)
+
+
 def _is_daily(err: dict) -> bool:
     blob = json.dumps(err)
     return "PerDay" in blob or "per day" in blob.lower()
@@ -208,7 +214,7 @@ def _call(task: str, parts: list[dict], schema: Optional[dict], json_mode: bool,
                     METER.fallbacks.append(f"{model} daily quota spent -> next model")
                     break
                 delay = _retry_delay(err)
-                if delay > max_wait:
+                if QUICK.get() or delay > max_wait:
                     METER.fallbacks.append(f"{model} rate-limited {delay:.0f}s -> next model")
                     break
                 time.sleep(delay + 1)
@@ -216,7 +222,7 @@ def _call(task: str, parts: list[dict], schema: Optional[dict], json_mode: bool,
             if r.status_code == 404:
                 METER.fallbacks.append(f"{model} not available -> next model")
                 break
-            if r.status_code in (500, 503) and attempt < 2:
+            if r.status_code in (500, 503) and attempt < 2 and not QUICK.get():
                 time.sleep(8 * (attempt + 1))  # "high demand" spikes are short
                 continue
             if r.status_code == 400 and use_schema and "schema" in json.dumps(err).lower():

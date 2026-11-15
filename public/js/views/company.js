@@ -14,6 +14,10 @@ export async function companyView(el, ctx, sym, alive) {
     return;
   }
   renderCompany(el, co, feed.items.filter((it) => it.symbol === sym), ctx, { back: "#/ledgers" });
+  if (ctx.jump) {                       // arriving from a "Start here" tile
+    const id = ctx.jump; ctx.jump = null;
+    setTimeout(() => el.querySelector(`#sec-${id}`)?.scrollIntoView({ block: "start" }), 0);
+  }
 }
 
 const KIND = {
