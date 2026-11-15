@@ -1,14 +1,14 @@
 name: finn-data
 
 # Keeps the Today screen live, on GitHub's free runners:
-#   13:00 IST Mon-Fri   intraday  new filings only
-#   19:10 IST Mon-Fri   eod       new filings and the day's closing prices
-#   09:30 IST Saturday  full      also new transcripts, annual reports and verdicts
+#   10:00-15:00 IST Mon-Fri, hourly   intraday  new filings only
+#   19:10 IST Mon-Fri                 eod       new filings and the day's closing prices
+#   09:30 IST Saturday                full      also new transcripts, annual reports and verdicts
 # Can also be started by hand (Actions -> finn-data -> Run workflow).
 # `python -m pipeline.freeze` turns the app back to the last snapshot.
 on:
   schedule:
-    - cron: "30 7 * * 1-5"
+    - cron: "30 4-9 * * 1-5"
     - cron: "40 13 * * 1-5"
     - cron: "0 4 * * 6"
   workflow_dispatch:
@@ -43,7 +43,7 @@ jobs:
         run: |
           MODE="${{ github.event.inputs.mode }}"
           case "${{ github.event.schedule }}" in
-            "30 7 * * 1-5")  MODE=intraday ;;
+            "30 4-9 * * 1-5") MODE=intraday ;;
             "40 13 * * 1-5") MODE=eod ;;
             "0 4 * * 6")     MODE=full ;;
           esac
